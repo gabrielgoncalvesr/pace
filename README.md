@@ -2,6 +2,10 @@
 
 Personal KPI tracker desktop app built with [Wails](https://wails.io) (Go + React + SQLite).
 
+![Dashboard](assets/pace-1.png)
+![KPI detail](assets/pace-2.png)
+![History](assets/pace-3.png)
+
 Track your goals, initiatives, and KPIs with a clean native macOS app.
 
 ## Stack
