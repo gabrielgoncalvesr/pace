@@ -96,6 +96,10 @@ func (s *Service) Archive(id string) error {
 	return s.repo.Archive(id)
 }
 
+func (s *Service) Delete(id string) error {
+	return s.repo.Delete(id)
+}
+
 func (s *Service) List() ([]domain.KPI, error) {
 	return s.repo.List()
 }

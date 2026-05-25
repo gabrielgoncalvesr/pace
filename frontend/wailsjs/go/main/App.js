@@ -26,6 +26,10 @@ export function CreateKPI(arg1) {
   return window['go']['main']['App']['CreateKPI'](arg1);
 }
 
+export function DeleteKPI(arg1) {
+  return window['go']['main']['App']['DeleteKPI'](arg1);
+}
+
 export function DeleteKPIEntry(arg1) {
   return window['go']['main']['App']['DeleteKPIEntry'](arg1);
 }

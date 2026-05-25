@@ -14,6 +14,8 @@ export function CreateInitiative(arg1:main.CreateInitiativeInput):Promise<main.I
 
 export function CreateKPI(arg1:main.CreateKPIInput):Promise<main.KPIOutput>;
 
+export function DeleteKPI(arg1:string):Promise<void>;
+
 export function DeleteKPIEntry(arg1:string):Promise<void>;
 
 export function GetDashboardSummary():Promise<main.DashboardSummaryOutput>;

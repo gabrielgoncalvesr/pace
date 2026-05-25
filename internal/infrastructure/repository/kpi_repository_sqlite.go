@@ -66,6 +66,18 @@ func (r *KPISQLiteRepository) Archive(id string) error {
 	return nil
 }
 
+func (r *KPISQLiteRepository) Delete(id string) error {
+	res, err := r.db.Exec(`DELETE FROM kpis WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete kpi: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return errors.New("kpi not found")
+	}
+	return nil
+}
+
 func (r *KPISQLiteRepository) GetByID(id string) (*kpi.KPI, error) {
 	row := r.db.QueryRow(`
 		SELECT id, goal_id, initiative_id, name, description, unit, custom_unit,

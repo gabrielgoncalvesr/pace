@@ -344,6 +344,10 @@ func (a *App) ArchiveKPI(id string) error {
 	return a.kpiService.Archive(id)
 }
 
+func (a *App) DeleteKPI(id string) error {
+	return a.kpiService.Delete(id)
+}
+
 func (a *App) ListKPIs() ([]KPIOutput, error) {
 	items, err := a.kpiService.List()
 	if err != nil {
