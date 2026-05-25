@@ -1,0 +1,33 @@
+# Build output
+build/bin/
+build/.DS_Store
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Go
+*.exe
+*.test
+*.out
+
+# SQLite databases
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
