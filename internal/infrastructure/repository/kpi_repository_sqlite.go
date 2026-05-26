@@ -120,6 +120,32 @@ func (r *KPISQLiteRepository) ListByGoal(goalID string) ([]kpi.KPI, error) {
 	return collectKPIs(rows)
 }
 
+// ListAll returns all KPIs including archived ones (needed for snapshot capture).
+func (r *KPISQLiteRepository) ListAll() ([]kpi.KPI, error) {
+	rows, err := r.db.Query(`
+		SELECT id, goal_id, initiative_id, name, description, unit, custom_unit,
+			target_value, period_type, allow_exceed_target, status, created_at, updated_at, archived_at
+		FROM kpis ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list all kpis: %w", err)
+	}
+	defer rows.Close()
+	return collectKPIs(rows)
+}
+
+func (r *KPISQLiteRepository) SetSuccessor(kpiID, successorID string) error {
+	res, err := r.db.Exec(`UPDATE kpis SET successor_kpi_id = ? WHERE id = ?`, successorID, kpiID)
+	if err != nil {
+		return fmt.Errorf("set successor: %w", err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errors.New("kpi not found")
+	}
+	return nil
+}
+
 func collectKPIs(rows *sql.Rows) ([]kpi.KPI, error) {
 	items := make([]kpi.KPI, 0)
 	for rows.Next() {

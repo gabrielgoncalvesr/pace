@@ -111,6 +111,20 @@ func (r *KPIEntrySQLiteRepository) SumByKPIAndDateRange(kpiID string, start, end
 	return total, nil
 }
 
+func (r *KPIEntrySQLiteRepository) SumEntriesBetween(kpiID string, from, to time.Time) (float64, int, error) {
+	var sum float64
+	var count int
+	err := r.db.QueryRow(`
+		SELECT COALESCE(SUM(value), 0), COUNT(*)
+		FROM kpi_entries
+		WHERE kpi_id = ? AND entry_date >= ? AND entry_date <= ?`,
+		kpiID, from.Format("2006-01-02"), to.Format("2006-01-02")).Scan(&sum, &count)
+	if err != nil {
+		return 0, 0, fmt.Errorf("sum entries between: %w", err)
+	}
+	return sum, count, nil
+}
+
 func scanEntry(s scanner) (*kpi.KPIEntry, error) {
 	var entry kpi.KPIEntry
 	if err := s.Scan(&entry.ID, &entry.KPIID, &entry.Value, &entry.EntryDate, &entry.Comment, &entry.CreatedAt, &entry.UpdatedAt); err != nil {
