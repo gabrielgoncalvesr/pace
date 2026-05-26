@@ -595,3 +595,40 @@ input:focus, select:focus, textarea:focus { border-color: #3b7bfa; box-shadow: 0
 }
 
 .history-goal-cell { max-width: 160px; }
+
+.reviews-view { display: flex; flex-direction: column; gap: 1.5rem; padding: 0.5rem 0; }
+.reviews-header { display: flex; justify-content: flex-end; }
+
+.snapshot-list { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.snapshot-card {
+  position: relative; cursor: pointer; padding: 0.75rem 1rem;
+  border: 2px solid var(--border); border-radius: 8px; min-width: 140px;
+  background: var(--card); transition: border-color 0.15s;
+}
+.snapshot-card:hover { border-color: var(--accent); }
+.snapshot-card.selected { border-color: var(--accent); background: var(--card-hover); }
+.snapshot-card-label { font-weight: 600; font-size: 0.95rem; }
+.snapshot-card-date { font-size: 0.8rem; color: var(--text-secondary); }
+.snapshot-card-badge {
+  position: absolute; top: 4px; right: 6px;
+  font-size: 0.7rem; font-weight: 700; color: var(--accent);
+}
+
+.compare-bar { display: flex; justify-content: center; }
+
+.comparison-results { display: flex; flex-direction: column; gap: 0.75rem; }
+.comparison-group-title { font-weight: 600; padding: 0.5rem 0; cursor: pointer; list-style: none; }
+.comparison-group-items { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.5rem 0; }
+.comparison-card {
+  padding: 0.75rem 1rem; border: 1px solid var(--border);
+  border-radius: 8px; min-width: 200px; display: flex; flex-direction: column; gap: 0.25rem;
+  background: var(--card);
+}
+.comparison-card-name { font-weight: 600; }
+.comparison-card-unit { font-size: 0.8rem; color: var(--text-secondary); }
+.comparison-card-values { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+.comparison-card-values .arrow { color: var(--text-secondary); }
+.comparison-card-values .delta.positive { color: #16a34a; }
+.comparison-card-values .delta.negative { color: #dc2626; }
+.comparison-card-progress { font-size: 0.85rem; color: var(--text-secondary); }
+.comparison-card-entries { font-size: 0.8rem; color: var(--text-secondary); }
