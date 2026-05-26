@@ -3,7 +3,7 @@ import './App.css';
 import paceLogo from './assets/images/logo.png';
 import DatePickerField from './DatePickerField';
 
-type View = 'dashboard' | 'goals' | 'history' | 'archived';
+type View = 'dashboard' | 'goals' | 'history' | 'archived' | 'reviews';
 type GoalStatus = 'active' | 'paused' | 'completed' | 'archived';
 type InitiativeStatus = 'active' | 'paused' | 'archived';
 type KPIStatus = 'active' | 'paused' | 'completed' | 'archived';
@@ -14,6 +14,13 @@ type KPI = { id: string; goalId: string; initiativeId?: string | null; name: str
 type KPIEntry = { id: string; kpiId: string; value: number; entryDate: string; comment: string; createdAt: string; updatedAt: string };
 type KPIProgress = { kpiId: string; currentValue: number; targetValue: number; percentage: number; visualPercentage: number; progressStatus: string; isCompleted: boolean; hasExceededTarget: boolean };
 type DashboardSummary = { totalKpis: number; activeKpis: number; completedKpis: number; overallPercent: number };
+type Snapshot = { id: string; label: string; takenAt: string; createdAt: string };
+type KPIComparison = {
+  kpiId: string; kpiName: string; kpiUnit: string; kpiCustomUnit: string;
+  periodType: string; valueA: number; valueB: number; delta: number;
+  progressA: number | null; progressB: number | null;
+  entriesInPeriod: number; status: string; successorKpiId: string;
+};
 
 type WailsApp = {
   CreateGoal(input: { title: string; description: string }): Promise<Goal>;
@@ -33,6 +40,10 @@ type WailsApp = {
   ListKPIHistory(kpiID: string): Promise<KPIEntry[]>;
   GetKPIProgress(id: string): Promise<KPIProgress>;
   GetDashboardSummary(): Promise<DashboardSummary>;
+  CreateSnapshot(label: string): Promise<Snapshot>;
+  ListSnapshots(): Promise<Snapshot[]>;
+  CompareSnapshots(snapshotAId: string, snapshotBId: string): Promise<KPIComparison[]>;
+  SetKPISuccessor(kpiId: string, successorId: string): Promise<void>;
 };
 
 const appApi = () => (window as any).go.main.App as WailsApp;
@@ -97,6 +108,12 @@ export default function App() {
   const [historyByKpi, setHistoryByKpi] = useState<Record<string, KPIEntry[]>>({});
   const [progressMap, setProgressMap] = useState<Record<string, KPIProgress>>({});
   const [summary, setSummary] = useState<DashboardSummary>({ totalKpis: 0, activeKpis: 0, completedKpis: 0, overallPercent: 0 });
+
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [selectedSnapIds, setSelectedSnapIds] = useState<string[]>([]);
+  const [comparisons, setComparisons] = useState<KPIComparison[] | null>(null);
+  const [newSnapLabel, setNewSnapLabel] = useState('');
+  const [newSnapOpen, setNewSnapOpen] = useState(false);
 
   const [selectedKpiId, setSelectedKpiId] = useState('');
   const [registerGoalId, setRegisterGoalId] = useState('');
@@ -257,6 +274,11 @@ export default function App() {
 
   useEffect(() => { refreshAll(); }, []);
   useEffect(() => {
+    if (activeView === 'reviews') {
+      appApi().ListSnapshots().then(setSnapshots).catch(console.error);
+    }
+  }, [activeView]);
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (registerOpen) return setRegisterOpen(false);
@@ -329,11 +351,41 @@ export default function App() {
     setTimeout(() => setToast(''), 3000);
   }
 
+  const handleCreateSnapshot = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newSnapLabel.trim()) return;
+    const snap = await appApi().CreateSnapshot(newSnapLabel.trim());
+    setSnapshots(prev => [snap, ...prev]);
+    setNewSnapLabel('');
+    setNewSnapOpen(false);
+  };
+
+  const toggleSnapSelection = (id: string) => {
+    setSelectedSnapIds(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
+    setComparisons(null);
+  };
+
+  const handleCompare = async () => {
+    if (selectedSnapIds.length !== 2) return;
+    const sorted = [...selectedSnapIds].sort((a, b) => {
+      const snapA = snapshots.find(s => s.id === a)!;
+      const snapB = snapshots.find(s => s.id === b)!;
+      return new Date(snapA.takenAt).getTime() - new Date(snapB.takenAt).getTime();
+    });
+    const result = await appApi().CompareSnapshots(sorted[0], sorted[1]);
+    setComparisons(result);
+  };
+
   const navItems: Array<{ label: string; icon: string; view: View }> = [
     { label: 'Dashboard', icon: '◉', view: 'dashboard' },
     { label: 'KPI', icon: '◎', view: 'goals' },
     { label: 'History', icon: '◍', view: 'history' },
     { label: 'Archived', icon: '◌', view: 'archived' },
+    { label: 'Reviews', icon: '⊙', view: 'reviews' },
   ];
 
   return (
@@ -626,6 +678,106 @@ export default function App() {
               )}
             </div>
           </section>
+        ) : null}
+
+        {activeView === 'reviews' ? (
+          <div className="reviews-view">
+            <div className="reviews-header">
+              <button className="btn btn-primary" onClick={() => setNewSnapOpen(true)}>Novo Corte</button>
+            </div>
+
+            <Modal open={newSnapOpen} title="Novo Corte" onClose={() => setNewSnapOpen(false)}>
+              <form onSubmit={handleCreateSnapshot} className="form">
+                <input
+                  className="input"
+                  placeholder="ex: Maio 2026"
+                  value={newSnapLabel}
+                  onChange={e => setNewSnapLabel(e.target.value)}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setNewSnapOpen(false)}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary">Criar</button>
+                </div>
+              </form>
+            </Modal>
+
+            {snapshots.length === 0 ? (
+              <EmptyState
+                title="Nenhum corte ainda"
+                description="Crie seu primeiro corte para começar a acompanhar sua evolução."
+                ctaLabel="Novo Corte"
+                onClick={() => setNewSnapOpen(true)}
+              />
+            ) : (
+              <>
+                <div className="snapshot-list">
+                  {snapshots.map(s => (
+                    <div
+                      key={s.id}
+                      className={`snapshot-card ${selectedSnapIds.includes(s.id) ? 'selected' : ''}`}
+                      onClick={() => toggleSnapSelection(s.id)}
+                    >
+                      <div className="snapshot-card-label">{s.label}</div>
+                      <div className="snapshot-card-date">{prettyDate(s.takenAt.slice(0, 10))}</div>
+                      {selectedSnapIds.includes(s.id) && (
+                        <span className="snapshot-card-badge">{selectedSnapIds.indexOf(s.id) === 0 ? 'A' : 'B'}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {selectedSnapIds.length === 2 && (
+                  <div className="compare-bar">
+                    <button className="btn btn-primary" onClick={handleCompare}>Comparar</button>
+                  </div>
+                )}
+
+                {comparisons && (
+                  <div className="comparison-results">
+                    {(['completed', 'improved', 'stagnant', 'regressed', 'ended', 'new'] as const).map(status => {
+                      const group = comparisons.filter(c => c.status === status);
+                      if (group.length === 0) return null;
+                      const labels: Record<string, string> = {
+                        completed: 'Concluído', improved: 'Melhorou', stagnant: 'Estagnado',
+                        regressed: 'Regrediu', ended: 'Encerrado', new: 'Novo'
+                      };
+                      return (
+                        <details key={status} open={status === 'improved' || status === 'completed'}>
+                          <summary className={`comparison-group-title status-${status}`}>
+                            {labels[status]} ({group.length})
+                          </summary>
+                          <div className="comparison-group-items">
+                            {group.map(c => (
+                              <div key={c.kpiId} className="comparison-card">
+                                <div className="comparison-card-name">{c.kpiName}</div>
+                                <div className="comparison-card-unit">{c.kpiCustomUnit || c.kpiUnit}</div>
+                                <div className="comparison-card-values">
+                                  <span>{c.valueA.toFixed(1)}</span>
+                                  <span className="arrow">→</span>
+                                  <span>{c.valueB.toFixed(1)}</span>
+                                  <span className={`delta ${c.delta >= 0 ? 'positive' : 'negative'}`}>
+                                    {c.delta >= 0 ? '+' : ''}{c.delta.toFixed(1)}
+                                  </span>
+                                </div>
+                                {c.progressA !== null && c.progressB !== null && (
+                                  <div className="comparison-card-progress">
+                                    {c.progressA?.toFixed(0)}% → {c.progressB?.toFixed(0)}%
+                                  </div>
+                                )}
+                                <div className="comparison-card-entries">{c.entriesInPeriod} registros no período</div>
+                                <StatusBadge status={c.status} />
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         ) : null}
       </div>
 
