@@ -65,6 +65,29 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_kpi_entries_kpi_id ON kpi_entries(kpi_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_kpi_entries_entry_date ON kpi_entries(entry_date);`,
 	`CREATE INDEX IF NOT EXISTS idx_kpi_entries_kpi_id_entry_date ON kpi_entries(kpi_id, entry_date);`,
+	`ALTER TABLE kpis ADD COLUMN successor_kpi_id TEXT REFERENCES kpis(id);`,
+	`CREATE TABLE IF NOT EXISTS snapshots (
+		id TEXT PRIMARY KEY,
+		label TEXT NOT NULL,
+		taken_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL
+	);`,
+	`CREATE TABLE IF NOT EXISTS snapshot_kpi_values (
+		id TEXT PRIMARY KEY,
+		snapshot_id TEXT NOT NULL,
+		kpi_id TEXT NOT NULL,
+		kpi_name TEXT NOT NULL,
+		kpi_unit TEXT NOT NULL,
+		kpi_custom_unit TEXT,
+		kpi_target_value REAL NOT NULL,
+		kpi_period_type TEXT NOT NULL,
+		value_at_snapshot REAL NOT NULL,
+		entries_count INTEGER NOT NULL,
+		progress_pct REAL,
+		is_tombstone BOOLEAN NOT NULL DEFAULT 0,
+		FOREIGN KEY (snapshot_id) REFERENCES snapshots(id),
+		FOREIGN KEY (kpi_id) REFERENCES kpis(id)
+	);`,
 }
 
 // RunMigrations executes the migration array in order and records each statement fingerprint.
