@@ -13,6 +13,7 @@ import (
 	goalapp "pace/internal/application/goal"
 	initiativeapp "pace/internal/application/initiative"
 	kpiapp "pace/internal/application/kpi"
+	snapshotapp "pace/internal/application/snapshot"
 	goalDomain "pace/internal/domain/goal"
 	initiativeDomain "pace/internal/domain/initiative"
 	kpiDomain "pace/internal/domain/kpi"
@@ -29,6 +30,7 @@ type App struct {
 	kpiService        *kpiapp.Service
 	entryService      *kpiapp.EntryService
 	dashboardService  *dashboardapp.Service
+	snapshotService   *snapshotapp.Service
 }
 
 // NewApp creates a new App application struct
@@ -66,6 +68,11 @@ func (a *App) startup(ctx context.Context) {
 	a.kpiService = kpiapp.NewService(kpiRepo)
 	a.entryService = kpiapp.NewEntryService(entryRepo)
 	a.dashboardService = dashboardapp.NewService(kpiRepo, entryRepo)
+	a.snapshotService = snapshotapp.NewService(
+		repository.NewSnapshotSQLiteRepository(db),
+		kpiRepo,
+		entryRepo,
+	)
 }
 
 func (a *App) shutdown(context.Context) {
@@ -632,6 +639,89 @@ func (a *App) GetKPIProgress(id string) (*KPIProgressOutput, error) {
 		IsCompleted:       p.IsCompleted,
 		HasExceededTarget: p.HasExceededTarget,
 	}, nil
+}
+
+type SnapshotOutput struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	TakenAt   string `json:"takenAt"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type KPIComparisonOutput struct {
+	KPIID           string   `json:"kpiId"`
+	KPIName         string   `json:"kpiName"`
+	KPIUnit         string   `json:"kpiUnit"`
+	KPICustomUnit   string   `json:"kpiCustomUnit"`
+	PeriodType      string   `json:"periodType"`
+	ValueA          float64  `json:"valueA"`
+	ValueB          float64  `json:"valueB"`
+	Delta           float64  `json:"delta"`
+	ProgressA       *float64 `json:"progressA"`
+	ProgressB       *float64 `json:"progressB"`
+	EntriesInPeriod int      `json:"entriesInPeriod"`
+	Status          string   `json:"status"`
+	SuccessorKPIID  string   `json:"successorKpiId"`
+}
+
+func (a *App) CreateSnapshot(label string) (*SnapshotOutput, error) {
+	s, err := a.snapshotService.Create(label)
+	if err != nil {
+		return nil, err
+	}
+	return &SnapshotOutput{
+		ID:        s.ID,
+		Label:     s.Label,
+		TakenAt:   s.TakenAt.Format(time.RFC3339),
+		CreatedAt: s.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *App) ListSnapshots() ([]SnapshotOutput, error) {
+	list, err := a.snapshotService.List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SnapshotOutput, len(list))
+	for i, s := range list {
+		out[i] = SnapshotOutput{
+			ID:        s.ID,
+			Label:     s.Label,
+			TakenAt:   s.TakenAt.Format(time.RFC3339),
+			CreatedAt: s.CreatedAt.Format(time.RFC3339),
+		}
+	}
+	return out, nil
+}
+
+func (a *App) CompareSnapshots(snapshotAID, snapshotBID string) ([]KPIComparisonOutput, error) {
+	comparisons, err := a.snapshotService.Compare(snapshotAID, snapshotBID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]KPIComparisonOutput, len(comparisons))
+	for i, c := range comparisons {
+		out[i] = KPIComparisonOutput{
+			KPIID:           c.KPIID,
+			KPIName:         c.KPIName,
+			KPIUnit:         c.KPIUnit,
+			KPICustomUnit:   c.KPICustomUnit,
+			PeriodType:      c.PeriodType,
+			ValueA:          c.ValueA,
+			ValueB:          c.ValueB,
+			Delta:           c.Delta,
+			ProgressA:       c.ProgressA,
+			ProgressB:       c.ProgressB,
+			EntriesInPeriod: c.EntriesInPeriod,
+			Status:          string(c.Status),
+			SuccessorKPIID:  c.SuccessorKPIID,
+		}
+	}
+	return out, nil
+}
+
+func (a *App) SetKPISuccessor(kpiID, successorID string) error {
+	return a.snapshotService.SetKPISuccessor(kpiID, successorID)
 }
 
 func (a *App) GetDashboardSummary() (*DashboardSummaryOutput, error) {
