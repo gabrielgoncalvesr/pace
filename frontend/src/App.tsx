@@ -529,17 +529,46 @@ export default function App() {
               </div>
             ) : (
               <div className="goals-grid">
-                {goalCards.map((item) => (
-                  <button key={item.goal.id} className="goal-card" onClick={() => setSelectedGoalDetailId(item.goal.id)}>
-                    <div className="goal-card-header">
-                      <h3>{item.goal.title}</h3>
-                      <StatusBadge status={item.goal.status} />
-                    </div>
-                    <div className="goal-card-progress"><span>Progress: {item.progress.toFixed(0)}%</span><div className="progress-track"><div className="progress-fill" style={{ width: `${item.visual}%` }} /></div></div>
-                    <div className="goal-card-meta">{item.initiativeCount} initiatives · {item.kpiCount} KPIs · Atualizado em {new Date(item.goal.updatedAt).toLocaleDateString('pt-BR')}</div>
-                    <div className="goal-card-actions"><span className="mini-btn">Open</span><span className="mini-btn" onClick={(e) => { e.stopPropagation(); appApi().ArchiveGoal(item.goal.id).then(refreshAll); }}>Archive</span></div>
-                  </button>
-                ))}
+                {goalCards.map((item) => {
+                  const progColor = item.progress >= 80 ? '#16a34a' : item.progress >= 40 ? 'var(--accent)' : item.progress === 0 ? '#d1d5db' : 'var(--accent)';
+                  return (
+                    <button key={item.goal.id} className="goal-card" onClick={() => setSelectedGoalDetailId(item.goal.id)}>
+                      <div className="gc-top">
+                        <StatusBadge status={item.goal.status} />
+                        <button
+                          className="gc-archive-btn"
+                          title="Arquivar"
+                          onClick={(e) => { e.stopPropagation(); appApi().ArchiveGoal(item.goal.id).then(refreshAll); }}
+                        >
+                          ◌
+                        </button>
+                      </div>
+                      <h3 className="gc-title">{item.goal.title}</h3>
+                      <div className="gc-progress">
+                        <div className="gc-progress-header">
+                          <span className="gc-progress-label">Progresso</span>
+                          <span className="gc-progress-pct" style={{ color: progColor }}>{item.progress.toFixed(0)}%</span>
+                        </div>
+                        <div className="gc-track">
+                          <div className="gc-fill" style={{ width: `${item.visual}%`, background: progColor }} />
+                        </div>
+                      </div>
+                      <div className="gc-meta">
+                        <span className="gc-meta-item">
+                          <span className="gc-meta-icon">⬡</span>{item.initiativeCount} initiative{item.initiativeCount !== 1 ? 's' : ''}
+                        </span>
+                        <span className="gc-meta-dot" />
+                        <span className="gc-meta-item">
+                          <span className="gc-meta-icon">◎</span>{item.kpiCount} KPI{item.kpiCount !== 1 ? 's' : ''}
+                        </span>
+                        <span className="gc-meta-dot" />
+                        <span className="gc-meta-item gc-meta-date">
+                          {new Date(item.goal.updatedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -761,7 +790,7 @@ export default function App() {
                               <option key={s.id} value={s.id}>{s.label}</option>
                             ))}
                           </select>
-                          {sel && <span className="reviews-period-date">{prettyDate(sel.takenAt.slice(0, 10))}</span>}
+                          <span className="reviews-period-date">{sel ? prettyDate(sel.takenAt.slice(0, 10)) : ' '}</span>
                         </div>
                       </div>
                     );
@@ -777,7 +806,7 @@ export default function App() {
 
                 {comparisons && (() => {
                   const improved = comparisons.filter(c => c.delta > 0 && c.entriesInPeriod > 0);
-                  const unchanged = comparisons.filter(c => c.delta === 0 && c.entriesInPeriod > 0);
+                  const unchanged = comparisons.filter(c => c.delta === 0);
                   const regressed = comparisons.filter(c => c.delta < 0);
                   const totalEntries = comparisons.reduce((s, c) => s + c.entriesInPeriod, 0);
                   const topKpi = [...comparisons].sort((a, b) => b.delta - a.delta)[0];
@@ -820,13 +849,18 @@ export default function App() {
                           <span className="rsc-value">{totalEntries}</span>
                           <span className="rsc-label">Total de registros</span>
                         </div>
-                        {topKpi && topKpi.delta > 0 && (
-                          <div className="reviews-summary-card rsc-highlight">
-                            <span className="rsc-value rsc-green-soft">+{topKpi.delta.toFixed(1)}</span>
-                            <span className="rsc-label">Maior evolução</span>
-                            <span className="rsc-sublabel">{topKpi.kpiName}</span>
-                          </div>
-                        )}
+                        {topKpi && topKpi.delta > 0 && (() => {
+                          const topGoalId = kpiGoalMap[topKpi.kpiId];
+                          const topGoal = goals.find(g => g.id === topGoalId);
+                          return (
+                            <div className="reviews-summary-card rsc-highlight">
+                              <span className="rsc-value rsc-green-soft">+{topKpi.delta.toFixed(1)}</span>
+                              <span className="rsc-label">Maior evolução</span>
+                              <span className="rsc-sublabel">{topKpi.kpiName}</span>
+                              {topGoal && <span className="rsc-sublabel" style={{ opacity: 0.7 }}>{topGoal.title}</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* KPI table per Goal */}
