@@ -122,6 +122,19 @@ export default function App() {
   const [progressMap, setProgressMap] = useState<Record<string, KPIProgress>>({});
   const [summary, setSummary] = useState<DashboardSummary>({ totalKpis: 0, activeKpis: 0, completedKpis: 0, overallPercent: 0 });
 
+  const [historyFilterGoal, setHistoryFilterGoal] = useState('');
+  const [historyFilterKpi, setHistoryFilterKpi] = useState('');
+  const [historyFilterText, setHistoryFilterText] = useState('');
+  const [historyFilterDateFrom, setHistoryFilterDateFrom] = useState('');
+  const [historyFilterDateTo, setHistoryFilterDateTo] = useState('');
+  const [historyFiltering, setHistoryFiltering] = useState(false);
+  const historyFilterTimer = useState<ReturnType<typeof setTimeout> | null>(null);
+  const triggerHistoryFilter = () => {
+    setHistoryFiltering(true);
+    if (historyFilterTimer[0]) clearTimeout(historyFilterTimer[0]);
+    historyFilterTimer[1](setTimeout(() => setHistoryFiltering(false), 350));
+  };
+
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [selectedSnapIds, setSelectedSnapIds] = useState<string[]>([]);
   const [comparisons, setComparisons] = useState<KPIComparison[] | null>(null);
@@ -625,54 +638,120 @@ export default function App() {
 
         {activeView === 'history' ? (
           <section className="content-grid">
-            <div className="panel">
-              <div className="panel-header"><h3>Recent Activity</h3></div>
-              {allRecentActivity.length === 0 ? (
-                <EmptyState title="No activity yet" description="Your recent KPI updates will appear here." ctaLabel="Quick Register" onClick={() => { setRegisterGoalId(''); setRegisterInitiativeId(''); setSelectedKpiId(''); setRegisterOpen(true); }} />
-              ) : (
-                <table className="data-table history-table">
-                  <thead><tr><th>Date</th><th>Goal</th><th>KPI</th><th>Comment</th><th>Actions</th></tr></thead>
-                  <tbody>
-                    {allRecentActivity.map((e) => {
-                      const k = kpis.find((x) => x.id === e.kpiId);
-                      const kGoal = k ? goals.find((g) => g.id === k.goalId) : undefined;
-                      const kInit = k ? initiatives.find((i) => i.id === k.initiativeId) : undefined;
-                      return (
-                        <tr key={e.id}>
-                          <td className="history-date">{prettyDate(e.entryDate)}</td>
-                          <td className="history-goal-cell"><div className="history-comment">{kGoal?.title || '-'}</div></td>
-                          <td>
-                            {k ? (
-                              <div className="history-tooltip">
-                                <span className="history-kpi-name">{k.name}</span>
-                                <div className="history-tooltip-bubble">
-                                  {kGoal && <div><strong>Goal:</strong> {kGoal.title}</div>}
-                                  {kInit && <div><strong>Initiative:</strong> {kInit.title}</div>}
-                                  <div><strong>Value:</strong> {e.value}</div>
+            {/* Filters */}
+            <div className="history-filters">
+              <DatePickerField value={historyFilterDateFrom} onChange={v => { setHistoryFilterDateFrom(v); triggerHistoryFilter(); }} placeholder="De" />
+              <DatePickerField value={historyFilterDateTo} onChange={v => { setHistoryFilterDateTo(v); triggerHistoryFilter(); }} placeholder="Até" />
+              <select className="history-filter-input history-filter-goal" value={historyFilterGoal} onChange={e => { setHistoryFilterGoal(e.target.value); setHistoryFilterKpi(''); triggerHistoryFilter(); }}>
+                <option value="">Todos os Goals</option>
+                {goals.filter(g => g.status !== 'archived').map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+              <select className="history-filter-input history-filter-kpi" value={historyFilterKpi} onChange={e => { setHistoryFilterKpi(e.target.value); triggerHistoryFilter(); }}>
+                <option value="">Todos os KPIs</option>
+                {kpis.filter(k => k.status !== 'archived' && (!historyFilterGoal || k.goalId === historyFilterGoal)).map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+              </select>
+              <input
+                className="history-filter-input history-filter-search"
+                type="search"
+                placeholder="Buscar comentário…"
+                value={historyFilterText}
+                onChange={e => { setHistoryFilterText(e.target.value); triggerHistoryFilter(); }}
+              />
+              <button
+                className="btn btn-ghost btn-sm history-filter-clear"
+                disabled={!historyFilterGoal && !historyFilterKpi && !historyFilterText && !historyFilterDateFrom && !historyFilterDateTo}
+                onClick={() => { setHistoryFilterGoal(''); setHistoryFilterKpi(''); setHistoryFilterText(''); setHistoryFilterDateFrom(''); setHistoryFilterDateTo(''); triggerHistoryFilter(); }}
+              >
+                Limpar
+              </button>
+            </div>
+
+            <div className={`panel history-panel${historyFiltering ? ' history-filtering' : ''}`}>
+              {(() => {
+                const filtered = allRecentActivity.filter(e => {
+                  const k = kpis.find(x => x.id === e.kpiId);
+                  if (historyFilterGoal && k?.goalId !== historyFilterGoal) return false;
+                  if (historyFilterKpi && e.kpiId !== historyFilterKpi) return false;
+                  if (historyFilterText && !e.comment?.toLowerCase().includes(historyFilterText.toLowerCase())) return false;
+                  if (historyFilterDateFrom && e.entryDate < historyFilterDateFrom) return false;
+                  if (historyFilterDateTo && e.entryDate > historyFilterDateTo) return false;
+                  return true;
+                });
+
+                if (filtered.length === 0) return (
+                  <EmptyState title="Nenhum registro encontrado" description="Tente ajustar os filtros ou registre um novo valor." ctaLabel="Quick Register" onClick={() => { setRegisterGoalId(''); setRegisterInitiativeId(''); setSelectedKpiId(''); setRegisterOpen(true); }} />
+                );
+
+                // group by date
+                const byDate: { date: string; entries: typeof filtered }[] = [];
+                for (const e of filtered) {
+                  const last = byDate[byDate.length - 1];
+                  if (last && last.date === e.entryDate) last.entries.push(e);
+                  else byDate.push({ date: e.entryDate, entries: [e] });
+                }
+
+                return (
+                  <table className="data-table history-table">
+                    <thead>
+                      <tr>
+                        <th className="ht-date">Data</th>
+                        <th className="ht-goal">Goal</th>
+                        <th className="ht-kpi">KPI</th>
+                        <th className="ht-val">Valor</th>
+                        <th className="ht-comment">Comentário</th>
+                        <th className="ht-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byDate.map(({ date, entries }) =>
+                        entries.map((e, idx) => {
+                          const k = kpis.find(x => x.id === e.kpiId);
+                          const kGoal = k ? goals.find(g => g.id === k.goalId) : undefined;
+                          const kInit = k ? initiatives.find(i => i.id === k.initiativeId) : undefined;
+                          return (
+                            <tr key={e.id} className={idx === 0 ? 'ht-group-first' : ''}>
+                              <td className="ht-date">
+                                {idx === 0 ? <span className="ht-date-badge">{prettyDate(date)}</span> : null}
+                              </td>
+                              <td className="ht-goal"><span className="ht-secondary">{kGoal?.title || '—'}</span></td>
+                              <td className="ht-kpi">
+                                {k ? (
+                                  <div className="history-tooltip">
+                                    <span className="ht-kpi-name">{k.name}</span>
+                                    {kInit && <span className="ht-secondary">{kInit.title}</span>}
+                                    <div className="history-tooltip-bubble">
+                                      {kGoal && <div><strong>Goal:</strong> {kGoal.title}</div>}
+                                      {kInit && <div><strong>Initiative:</strong> {kInit.title}</div>}
+                                      <div><strong>Valor:</strong> {e.value}</div>
+                                    </div>
+                                  </div>
+                                ) : '—'}
+                              </td>
+                              <td className="ht-val"><span className="ht-value-chip">{e.value}</span></td>
+                              <td className="ht-comment">
+                                {e.comment ? (
+                                  <div className="history-tooltip">
+                                    <span className="ht-comment-text">{truncateText(e.comment, COMMENT_MAX_CHARS)}</span>
+                                    <div className="history-tooltip-bubble">{e.comment}</div>
+                                  </div>
+                                ) : <span className="ht-empty">—</span>}
+                              </td>
+                              <td className="ht-actions">
+                                <div className="ht-action-wrap" data-tip="Editar">
+                                  <button className="icon-btn" onClick={() => { setEditingEntryId(e.id); setEntryValue(String(e.value)); setEntryDate(e.entryDate); setEntryComment(e.comment || ''); setRegisterOpen(true); }}>✎</button>
                                 </div>
-                              </div>
-                            ) : '-'}
-                          </td>
-                          <td className="history-comment-cell">
-                            {e.comment ? (
-                              <div className="history-tooltip">
-                                <div className="history-comment">{truncateText(e.comment, COMMENT_MAX_CHARS)}</div>
-                                <div className="history-tooltip-bubble">{e.comment}</div>
-                              </div>
-                            ) : (
-                              <div className="history-comment">-</div>
-                            )}
-                          </td>
-                          <td>
-                            <button className="icon-btn" title="Edit" onClick={() => { setEditingEntryId(e.id); setEntryValue(String(e.value)); setEntryDate(e.entryDate); setEntryComment(e.comment || ''); setRegisterOpen(true); }}>✎</button>
-                            <button className="icon-btn danger" title="Delete" onClick={() => appApi().DeleteKPIEntry(e.id).then(refreshAll)}>✕</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                                <div className="ht-action-wrap" data-tip="Excluir">
+                                  <button className="icon-btn danger" onClick={() => appApi().DeleteKPIEntry(e.id).then(refreshAll)}>✕</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                );
+              })()}
             </div>
           </section>
         ) : null}
@@ -725,7 +804,7 @@ export default function App() {
         ) : null}
 
         {activeView === 'reviews' ? (
-          <div className="reviews-view">
+          <div className="reviews-view reviews-scrollbar">
             {/* Page header */}
             <div className="reviews-page-header">
               <div className="reviews-page-header-text">
@@ -765,45 +844,47 @@ export default function App() {
                   {(['A', 'B'] as const).map((slot, idx) => {
                     const selId = selectedSnapIds[idx];
                     const sel = snapshots.find(s => s.id === selId);
-                    const label = slot === 'A' ? 'Período A' : 'Período B';
+                    const label = slot === 'A' ? 'Per\u00edodo A' : 'Per\u00edodo B';
                     return (
                       <div key={slot} className="reviews-period-slot">
-                        <div className="reviews-period-select">
-                          <label className="reviews-period-label">
-                            <span className="reviews-period-badge">{slot}</span>
-                            {label}
-                          </label>
-                          <select
-                            value={selId ?? ''}
-                            onChange={e => {
-                              const id = e.target.value;
-                              setSelectedSnapIds(prev => {
-                                const next = [...prev];
-                                next[idx] = id;
-                                return next.filter(Boolean);
-                              });
-                              setComparisons(null);
-                            }}
-                          >
-                            <option value="">— selecionar —</option>
-                            {snapshots.map(s => (
-                              <option key={s.id} value={s.id}>{s.label}</option>
-                            ))}
-                          </select>
-                          <span className="reviews-period-date">{sel ? prettyDate(sel.takenAt.slice(0, 10)) : ' '}</span>
-                        </div>
+                        <label className="reviews-period-label">
+                          <span className="reviews-period-badge">{slot}</span>
+                          {label}
+                        </label>
+                        <select
+                          className="reviews-period-select"
+                          value={selId ?? ''}
+                          onChange={e => {
+                            const id = e.target.value;
+                            setSelectedSnapIds(prev => {
+                              const next = [...prev];
+                              next[idx] = id;
+                              return next.filter(Boolean);
+                            });
+                            setComparisons(null);
+                          }}
+                        >
+                          <option value="">— selecionar —</option>
+                          {snapshots.map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </select>
+                        <span className="reviews-period-date">{sel ? prettyDate(sel.takenAt.slice(0, 10)) : ' '}</span>
                       </div>
                     );
                   })}
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleCompare}
-                    disabled={selectedSnapIds.length < 2}
-                  >
-                    Comparar
-                  </button>
+                  <div className="reviews-period-btn-col">
+                    <span className="reviews-period-label" style={{ visibility: 'hidden' }}>{'.' }</span>
+                    <button
+                      className="btn btn-primary reviews-compare-btn"
+                      onClick={handleCompare}
+                      disabled={selectedSnapIds.length < 2}
+                    >
+                      Comparar
+                    </button>
+                    <span className="reviews-period-date" style={{ visibility: 'hidden' }}>{' '}</span>
+                  </div>
                 </div>
-
                 {comparisons && (() => {
                   const improved = comparisons.filter(c => c.delta > 0 && c.entriesInPeriod > 0);
                   const unchanged = comparisons.filter(c => c.delta === 0);

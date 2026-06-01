@@ -173,24 +173,79 @@ html, body, #root { margin: 0; min-height: 100%; background: var(--bg); color: v
 .kpi-table td:nth-child(6),
 .kpi-table td:nth-child(7),
 .kpi-table td:nth-child(8),
-.history-table td:nth-child(1),
-.history-table td:nth-child(5) { text-align: center; }
-.history-date {
-  width: 120px;
-  min-width: 120px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+/* ── History filters ── */
+.history-filters {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: nowrap;
+  padding: 0.65rem 1rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
 }
-.history-comment-cell {
-  max-width: 460px;
+.history-filter-input {
+  border: 1px solid var(--border-strong); border-radius: 7px;
+  padding: 0.38rem 0.6rem; font-size: 0.83rem; background: var(--bg);
+  color: var(--text); outline: none; min-width: 0;
 }
-.history-comment {
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.history-filter-input:focus { border-color: var(--accent); }
+.history-filter-input[type="date"] { width: 130px; flex-shrink: 0; }
+.history-filter-input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+.history-filter-goal { width: 200px; flex-shrink: 0; }
+.history-filter-kpi  { width: 220px; flex-shrink: 0; }
+.history-filter-search { flex: 1; }
+.history-filter-clear { flex-shrink: 0; font-size: 0.8rem; padding: 0.35rem 0.7rem; color: var(--text-muted); white-space: nowrap; }
+.history-filter-clear:disabled { opacity: 0.35; cursor: default; }
+
+.history-filtering { opacity: 0.5; transition: opacity 0.15s ease; pointer-events: none; }
+.history-panel { transition: opacity 0.15s ease; }
+
+/* ── History table ── */
+.history-table { table-layout: fixed; }
+.history-panel { overflow: visible; }
+.history-table .history-tooltip-bubble {
+  bottom: auto; top: calc(100% + 6px);
 }
+.history-table th.ht-date   { width: 110px; }
+.history-table th.ht-goal   { width: 18%; }
+.history-table th.ht-kpi    { width: 22%; }
+.history-table th.ht-val    { width: 70px; text-align: right; }
+.history-table th.ht-comment{ }
+.history-table th.ht-actions{ width: 72px; text-align: center; }
+
+.history-table td { vertical-align: middle; }
+.history-table tr.ht-group-first td { border-top: 1px solid var(--border-strong); }
+.history-table tr.ht-group-first:first-child td { border-top: none; }
+
+.ht-date { white-space: nowrap; }
+.ht-date-badge {
+  display: inline-block; font-size: 0.78rem; font-weight: 600;
+  color: var(--text-secondary); white-space: nowrap;
+}
+.ht-goal { }
+.ht-kpi { }
+.ht-kpi-name { display: block; font-weight: 500; font-size: 0.85rem; color: var(--text); }
+.ht-secondary { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ht-val { text-align: right; }
+.ht-value-chip {
+  display: inline-block; font-size: 0.82rem; font-weight: 600;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.ht-comment { }
+.ht-comment-text { display: block; font-size: 0.82rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ht-empty { font-size: 0.82rem; color: var(--border-strong); }
+.ht-actions { text-align: center; white-space: nowrap; }
+.ht-action-wrap {
+  position: relative; display: inline-block;
+}
+.ht-action-wrap::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a; color: #f8fafc;
+  font-size: 0.72rem; font-weight: 500; white-space: nowrap;
+  padding: 3px 7px; border-radius: 5px;
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 30;
+}
+.ht-action-wrap:hover::after { opacity: 1; }
 .history-tooltip {
   position: relative;
   display: block;
@@ -640,11 +695,6 @@ input:focus, select:focus, textarea:focus { border-color: #3b7bfa; box-shadow: 0
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.history-kpi-name {
-  border-bottom: 1px dashed var(--text-muted);
-  cursor: default;
-}
-
 .history-goal-cell { max-width: 160px; }
 
 /* ── Reviews view ── */
@@ -661,11 +711,12 @@ input:focus, select:focus, textarea:focus { border-color: #3b7bfa; box-shadow: 0
 
 /* Period selector bar */
 .reviews-period-bar {
-  display: flex; align-items: center; gap: 1rem;
+  display: grid; grid-template-columns: 1fr 1fr auto;
+  align-items: end; gap: 1rem;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 1rem 1.25rem;
 }
-.reviews-period-slot { flex: 1; display: flex; flex-direction: column; gap: 0; }
+.reviews-period-slot { display: flex; flex-direction: column; gap: 0.3rem; }
 .reviews-period-badge {
   width: 20px; height: 20px; border-radius: 5px; background: var(--accent);
   color: #fff; font-size: 0.68rem; font-weight: 700;
@@ -673,19 +724,30 @@ input:focus, select:focus, textarea:focus { border-color: #3b7bfa; box-shadow: 0
   margin-right: 0.35rem; vertical-align: middle; flex-shrink: 0;
 }
 .reviews-period-label {
-  display: flex; align-items: center; gap: 0;
+  display: flex; align-items: center;
   font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);
-  margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.04em;
+  text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
 }
-.reviews-period-select { display: flex; flex-direction: column; gap: 0.25rem; }
-.reviews-period-select select {
+.reviews-period-select {
   border: 1px solid var(--border-strong); border-radius: 7px;
   padding: 0.45rem 0.7rem; font-size: 0.88rem; background: var(--bg);
   color: var(--text); outline: none; cursor: pointer; width: 100%;
+  height: 36px;
 }
-.reviews-period-select select:focus { border-color: var(--accent); }
-.reviews-period-date { font-size: 0.73rem; color: var(--text-muted); min-height: 1em; display: block; }
-.reviews-period-bar .btn { flex-shrink: 0; align-self: center; }
+.reviews-period-select:focus { border-color: var(--accent); }
+.reviews-period-date { font-size: 0.73rem; color: var(--text-muted); min-height: 1.1em; display: block; }
+.reviews-period-btn-col { display: flex; flex-direction: column; gap: 0.3rem; }
+.reviews-compare-btn { height: 36px; white-space: nowrap; width: 100%; }
+
+/* Thin scrollbar for Reviews only */
+.reviews-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+.reviews-scrollbar::-webkit-scrollbar { width: 6px; }
+.reviews-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.reviews-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.45); border-radius: 999px; }
+.reviews-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(100, 116, 139, 0.65); }
 
 /* Summary cards */
 .reviews-summary-bar { display: flex; gap: 0.875rem; align-items: stretch; }
