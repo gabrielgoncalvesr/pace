@@ -14,6 +14,10 @@ export function ArchiveKPI(arg1) {
   return window['go']['main']['App']['ArchiveKPI'](arg1);
 }
 
+export function CompareSnapshots(arg1, arg2) {
+  return window['go']['main']['App']['CompareSnapshots'](arg1, arg2);
+}
+
 export function CreateGoal(arg1) {
   return window['go']['main']['App']['CreateGoal'](arg1);
 }
@@ -24,6 +28,10 @@ export function CreateInitiative(arg1) {
 
 export function CreateKPI(arg1) {
   return window['go']['main']['App']['CreateKPI'](arg1);
+}
+
+export function CreateSnapshot(arg1) {
+  return window['go']['main']['App']['CreateSnapshot'](arg1);
 }
 
 export function DeleteKPI(arg1) {
@@ -74,8 +82,16 @@ export function ListKPIsByGoal(arg1) {
   return window['go']['main']['App']['ListKPIsByGoal'](arg1);
 }
 
+export function ListSnapshots() {
+  return window['go']['main']['App']['ListSnapshots']();
+}
+
 export function RegisterKPIEntry(arg1) {
   return window['go']['main']['App']['RegisterKPIEntry'](arg1);
+}
+
+export function SetKPISuccessor(arg1, arg2) {
+  return window['go']['main']['App']['SetKPISuccessor'](arg1, arg2);
 }
 
 export function UpdateGoal(arg1, arg2) {

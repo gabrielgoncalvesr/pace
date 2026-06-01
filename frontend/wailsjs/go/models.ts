@@ -186,6 +186,42 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class KPIComparisonOutput {
+	    kpiId: string;
+	    kpiName: string;
+	    kpiUnit: string;
+	    kpiCustomUnit: string;
+	    periodType: string;
+	    valueA: number;
+	    valueB: number;
+	    delta: number;
+	    progressA?: number;
+	    progressB?: number;
+	    entriesInPeriod: number;
+	    status: string;
+	    successorKpiId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KPIComparisonOutput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kpiId = source["kpiId"];
+	        this.kpiName = source["kpiName"];
+	        this.kpiUnit = source["kpiUnit"];
+	        this.kpiCustomUnit = source["kpiCustomUnit"];
+	        this.periodType = source["periodType"];
+	        this.valueA = source["valueA"];
+	        this.valueB = source["valueB"];
+	        this.delta = source["delta"];
+	        this.progressA = source["progressA"];
+	        this.progressB = source["progressB"];
+	        this.entriesInPeriod = source["entriesInPeriod"];
+	        this.status = source["status"];
+	        this.successorKpiId = source["successorKpiId"];
+	    }
+	}
 	export class KPIEntryOutput {
 	    id: string;
 	    kpiId: string;
@@ -331,6 +367,24 @@ export namespace main {
 	        this.value = source["value"];
 	        this.entryDate = source["entryDate"];
 	        this.comment = source["comment"];
+	    }
+	}
+	export class SnapshotOutput {
+	    id: string;
+	    label: string;
+	    takenAt: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotOutput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.takenAt = source["takenAt"];
+	        this.createdAt = source["createdAt"];
 	    }
 	}
 	export class UpdateGoalInput {

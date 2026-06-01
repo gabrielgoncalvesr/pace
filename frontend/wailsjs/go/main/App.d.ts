@@ -8,11 +8,15 @@ export function ArchiveInitiative(arg1:string):Promise<void>;
 
 export function ArchiveKPI(arg1:string):Promise<void>;
 
+export function CompareSnapshots(arg1:string,arg2:string):Promise<Array<main.KPIComparisonOutput>>;
+
 export function CreateGoal(arg1:main.CreateGoalInput):Promise<main.GoalOutput>;
 
 export function CreateInitiative(arg1:main.CreateInitiativeInput):Promise<main.InitiativeOutput>;
 
 export function CreateKPI(arg1:main.CreateKPIInput):Promise<main.KPIOutput>;
+
+export function CreateSnapshot(arg1:string):Promise<main.SnapshotOutput>;
 
 export function DeleteKPI(arg1:string):Promise<void>;
 
@@ -38,7 +42,11 @@ export function ListKPIs():Promise<Array<main.KPIOutput>>;
 
 export function ListKPIsByGoal(arg1:string):Promise<Array<main.KPIOutput>>;
 
+export function ListSnapshots():Promise<Array<main.SnapshotOutput>>;
+
 export function RegisterKPIEntry(arg1:main.RegisterKPIEntryInput):Promise<main.KPIEntryOutput>;
+
+export function SetKPISuccessor(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateGoal(arg1:string,arg2:main.UpdateGoalInput):Promise<main.GoalOutput>;
 

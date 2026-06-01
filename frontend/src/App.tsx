@@ -51,6 +51,19 @@ const today = () => new Date().toISOString().slice(0, 10);
 const prettyDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const COMMENT_MAX_CHARS = 72;
 
+const UNIT_LABELS: Record<string, string> = {
+  class: 'Aula', text: 'Texto', minute: 'Minuto', hour: 'Hora',
+  article: 'Artigo', custom: 'Customizado', day: 'Dia',
+  money: 'Valor', step: 'Etapa', book: 'Livro',
+};
+const translateUnit = (unit: string, customUnit?: string) =>
+  customUnit && customUnit.trim() ? customUnit : (UNIT_LABELS[unit] ?? unit);
+
+const PERIOD_LABELS: Record<string, string> = {
+  monthly: 'Mensal', annual: 'Anual', punctual: 'Pontual',
+};
+const translatePeriod = (p: string) => PERIOD_LABELS[p] ?? p;
+
 function truncateText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   return `${value.slice(0, maxChars).trimEnd()}...`;
@@ -276,6 +289,8 @@ export default function App() {
   useEffect(() => {
     if (activeView === 'reviews') {
       appApi().ListSnapshots().then(setSnapshots).catch(console.error);
+      setSelectedSnapIds([]);
+      setComparisons(null);
     }
   }, [activeView]);
   useEffect(() => {
@@ -682,15 +697,20 @@ export default function App() {
 
         {activeView === 'reviews' ? (
           <div className="reviews-view">
-            <div className="reviews-header">
-              <button className="btn btn-primary" onClick={() => setNewSnapOpen(true)}>Novo Corte</button>
+            {/* Page header */}
+            <div className="reviews-page-header">
+              <div className="reviews-page-header-text">
+                <h2 className="reviews-title">Comparativo de KPIs</h2>
+                <p className="reviews-subtitle">Compare a evolução dos seus indicadores entre dois cortes de período.</p>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => setNewSnapOpen(true)}>+ Novo Corte</button>
             </div>
 
             <Modal open={newSnapOpen} title="Novo Corte" onClose={() => setNewSnapOpen(false)}>
               <form onSubmit={handleCreateSnapshot} className="form">
                 <input
                   className="input"
-                  placeholder="ex: Maio 2026"
+                  placeholder="ex: Junho 2026"
                   value={newSnapLabel}
                   onChange={e => setNewSnapLabel(e.target.value)}
                   autoFocus
@@ -711,70 +731,177 @@ export default function App() {
               />
             ) : (
               <>
-                <div className="snapshot-list">
-                  {snapshots.map(s => (
-                    <div
-                      key={s.id}
-                      className={`snapshot-card ${selectedSnapIds.includes(s.id) ? 'selected' : ''}`}
-                      onClick={() => toggleSnapSelection(s.id)}
-                    >
-                      <div className="snapshot-card-label">{s.label}</div>
-                      <div className="snapshot-card-date">{prettyDate(s.takenAt.slice(0, 10))}</div>
-                      {selectedSnapIds.includes(s.id) && (
-                        <span className="snapshot-card-badge">{selectedSnapIds.indexOf(s.id) === 0 ? 'A' : 'B'}</span>
-                      )}
-                    </div>
-                  ))}
+                {/* Period selector + compare button */}
+                <div className="reviews-period-bar">
+                  {(['A', 'B'] as const).map((slot, idx) => {
+                    const selId = selectedSnapIds[idx];
+                    const sel = snapshots.find(s => s.id === selId);
+                    const label = slot === 'A' ? 'Período A' : 'Período B';
+                    return (
+                      <div key={slot} className="reviews-period-slot">
+                        <div className="reviews-period-select">
+                          <label className="reviews-period-label">
+                            <span className="reviews-period-badge">{slot}</span>
+                            {label}
+                          </label>
+                          <select
+                            value={selId ?? ''}
+                            onChange={e => {
+                              const id = e.target.value;
+                              setSelectedSnapIds(prev => {
+                                const next = [...prev];
+                                next[idx] = id;
+                                return next.filter(Boolean);
+                              });
+                              setComparisons(null);
+                            }}
+                          >
+                            <option value="">— selecionar —</option>
+                            {snapshots.map(s => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                          </select>
+                          {sel && <span className="reviews-period-date">{prettyDate(sel.takenAt.slice(0, 10))}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleCompare}
+                    disabled={selectedSnapIds.length < 2}
+                  >
+                    Comparar
+                  </button>
                 </div>
 
-                {selectedSnapIds.length === 2 && (
-                  <div className="compare-bar">
-                    <button className="btn btn-primary" onClick={handleCompare}>Comparar</button>
-                  </div>
-                )}
+                {comparisons && (() => {
+                  const improved = comparisons.filter(c => c.delta > 0 && c.entriesInPeriod > 0);
+                  const unchanged = comparisons.filter(c => c.delta === 0 && c.entriesInPeriod > 0);
+                  const regressed = comparisons.filter(c => c.delta < 0);
+                  const totalEntries = comparisons.reduce((s, c) => s + c.entriesInPeriod, 0);
+                  const topKpi = [...comparisons].sort((a, b) => b.delta - a.delta)[0];
 
-                {comparisons && (
-                  <div className="comparison-results">
-                    {(['completed', 'improved', 'stagnant', 'regressed', 'ended', 'new'] as const).map(status => {
-                      const group = comparisons.filter(c => c.status === status);
-                      if (group.length === 0) return null;
-                      const labels: Record<string, string> = {
-                        completed: 'Concluído', improved: 'Melhorou', stagnant: 'Estagnado',
-                        regressed: 'Regrediu', ended: 'Encerrado', new: 'Novo'
-                      };
-                      return (
-                        <details key={status} open={status === 'improved' || status === 'completed'}>
-                          <summary className={`comparison-group-title status-${status}`}>
-                            {labels[status]} ({group.length})
-                          </summary>
-                          <div className="comparison-group-items">
-                            {group.map(c => (
-                              <div key={c.kpiId} className="comparison-card">
-                                <div className="comparison-card-name">{c.kpiName}</div>
-                                <div className="comparison-card-unit">{c.kpiCustomUnit || c.kpiUnit}</div>
-                                <div className="comparison-card-values">
-                                  <span>{c.valueA.toFixed(1)}</span>
-                                  <span className="arrow">→</span>
-                                  <span>{c.valueB.toFixed(1)}</span>
-                                  <span className={`delta ${c.delta >= 0 ? 'positive' : 'negative'}`}>
-                                    {c.delta >= 0 ? '+' : ''}{c.delta.toFixed(1)}
-                                  </span>
-                                </div>
-                                {c.progressA !== null && c.progressB !== null && (
-                                  <div className="comparison-card-progress">
-                                    {c.progressA?.toFixed(0)}% → {c.progressB?.toFixed(0)}%
-                                  </div>
-                                )}
-                                <div className="comparison-card-entries">{c.entriesInPeriod} registros no período</div>
-                                <StatusBadge status={c.status} />
-                              </div>
-                            ))}
+                  // group by real Goal using kpis state as the join
+                  const kpiGoalMap: Record<string, string> = {};
+                  for (const k of kpis) kpiGoalMap[k.id] = k.goalId;
+
+                  const byGoal: Record<string, KPIComparison[]> = {};
+                  for (const c of comparisons) {
+                    const goalId = kpiGoalMap[c.kpiId] ?? '__unknown__';
+                    if (!byGoal[goalId]) byGoal[goalId] = [];
+                    byGoal[goalId].push(c);
+                  }
+
+                  // all non-archived goals, preserving their order
+                  const visibleGoals = goals.filter(g => g.status !== 'archived');
+
+                  // track duplicate kpi names for disambiguation
+                  const nameCounts: Record<string, number> = {};
+                  for (const c of comparisons) nameCounts[c.kpiName] = (nameCounts[c.kpiName] ?? 0) + 1;
+
+                  return (
+                    <>
+                      {/* Summary cards */}
+                      <div className="reviews-summary-bar">
+                        <div className="reviews-summary-card">
+                          <span className="rsc-value rsc-green">{improved.length}</span>
+                          <span className="rsc-label">Melhoraram</span>
+                        </div>
+                        <div className="reviews-summary-card">
+                          <span className="rsc-value rsc-gray">{unchanged.length}</span>
+                          <span className="rsc-label">Sem mudança</span>
+                        </div>
+                        <div className="reviews-summary-card">
+                          <span className="rsc-value rsc-red">{regressed.length}</span>
+                          <span className="rsc-label">Pioraram</span>
+                        </div>
+                        <div className="reviews-summary-card">
+                          <span className="rsc-value">{totalEntries}</span>
+                          <span className="rsc-label">Total de registros</span>
+                        </div>
+                        {topKpi && topKpi.delta > 0 && (
+                          <div className="reviews-summary-card rsc-highlight">
+                            <span className="rsc-value rsc-green-soft">+{topKpi.delta.toFixed(1)}</span>
+                            <span className="rsc-label">Maior evolução</span>
+                            <span className="rsc-sublabel">{topKpi.kpiName}</span>
                           </div>
-                        </details>
-                      );
-                    })}
-                  </div>
-                )}
+                        )}
+                      </div>
+
+                      {/* KPI table per Goal */}
+                      {visibleGoals.map(goal => {
+                        const rows = byGoal[goal.id] ?? [];
+                        return (
+                          <div key={goal.id} className="reviews-category-block">
+                            <div className="reviews-category-title">
+                              <span>{goal.title}</span>
+                              <span className="reviews-category-count">{rows.length} indicador{rows.length !== 1 ? 'es' : ''}</span>
+                            </div>
+                            {rows.length === 0 ? (
+                              <div className="reviews-empty-goal">Nenhum indicador neste goal para comparação</div>
+                            ) : (
+                              <table className="reviews-table">
+                                <thead>
+                                  <tr>
+                                    <th>Indicador</th>
+                                    <th className="col-num">Período A</th>
+                                    <th className="col-num">Período B</th>
+                                    <th className="col-num">Variação</th>
+                                    <th>Progresso</th>
+                                    <th className="col-num">Frequência</th>
+                                    <th className="col-num">Registros</th>
+                                    <th className="col-num">Tipo</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map(c => {
+                                    const hasData = c.entriesInPeriod > 0 || c.valueB > 0;
+                                    const deltaClass = c.delta > 0 ? 'delta-pos' : c.delta < 0 ? 'delta-neg' : 'delta-zero';
+                                    const progB = c.progressB ?? 0;
+                                    const progBarWidth = Math.min(progB, 100);
+                                    return (
+                                      <tr key={c.kpiId} className={hasData ? '' : 'row-dim'}>
+                                        <td className="col-name">
+                                          <span className="col-name-primary">{c.kpiName}</span>
+                                          {(() => {
+                                            const kpi = kpis.find(k => k.id === c.kpiId);
+                                            const initiative = kpi?.initiativeId ? initiatives.find(i => i.id === kpi.initiativeId) : null;
+                                            return initiative ? <span className="col-name-secondary">{initiative.title}</span> : null;
+                                          })()}
+                                        </td>
+                                        <td className="col-num">{c.valueA.toFixed(1)}</td>
+                                        <td className="col-num"><strong>{c.valueB.toFixed(1)}</strong></td>
+                                        <td className="col-num">
+                                          <span className={`delta-badge ${deltaClass}`}>
+                                            {c.delta > 0 ? '+' : ''}{c.delta.toFixed(1)}
+                                          </span>
+                                        </td>
+                                        <td className="col-progress">
+                                          {c.progressB !== null ? (
+                                            <div className="prog-wrap">
+                                              <div className="prog-bar">
+                                                <div className="prog-fill" style={{ width: `${progBarWidth}%` }} />
+                                              </div>
+                                              <span className="prog-label">{progB.toFixed(0)}%</span>
+                                            </div>
+                                          ) : <span className="text-muted">—</span>}
+                                        </td>
+                                        <td className="col-num text-muted" style={{ fontSize: '0.78rem' }}>{translatePeriod(c.periodType)}</td>
+                                        <td className="col-num text-muted">{c.entriesInPeriod}</td>
+                                        <td className="col-num"><span className="unit-pill unit-pill-sm">{translateUnit(c.kpiUnit, c.kpiCustomUnit)}</span></td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>
