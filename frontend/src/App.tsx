@@ -54,7 +54,7 @@ const COMMENT_MAX_CHARS = 72;
 const UNIT_LABELS: Record<string, string> = {
   class: 'Aula', text: 'Texto', minute: 'Minuto', hour: 'Hora',
   article: 'Artigo', custom: 'Customizado', day: 'Dia',
-  money: 'Valor', step: 'Etapa', book: 'Livro',
+  money: 'Quantidade', step: 'Etapa', book: 'Livro',
 };
 const translateUnit = (unit: string, customUnit?: string) =>
   customUnit && customUnit.trim() ? customUnit : (UNIT_LABELS[unit] ?? unit);
@@ -230,6 +230,16 @@ export default function App() {
   const activityMax = useMemo(() => {
     const values = activityHeatmap.flat().map((d) => d.value);
     return values.length ? Math.max(...values) : 0;
+  }, [activityHeatmap]);
+
+  const activityStats = useMemo(() => {
+    const flat = activityHeatmap.flat();
+    const activeDays = flat.filter(d => d.value > 0).length;
+    let bestStreak = 0, cur = 0;
+    for (const d of flat) { if (d.value > 0) { cur++; bestStreak = Math.max(bestStreak, cur); } else cur = 0; }
+    let currentStreak = 0;
+    for (let i = flat.length - 1; i >= 0; i--) { if (flat[i].value > 0) currentStreak++; else break; }
+    return { activeDays, bestStreak, currentStreak };
   }, [activityHeatmap]);
 
   const goalCards = useMemo(() => goals.filter((g) => g.status !== 'archived').map((goal) => {
@@ -454,78 +464,126 @@ export default function App() {
           </div>
         </header>
 
+        <div className="main-content">
         {error ? <div className="error-banner">{error}</div> : null}
         {toast ? <div className="toast-success">{toast}</div> : null}
 
         {activeView === 'dashboard' ? (
           <section className="content-grid">
+            {/* Stat cards */}
             <section className="stats-grid">
-              <div className="stat-card premium"><div className="metric-icon">↗</div><span>Monthly Progress</span><strong>{summary.overallPercent.toFixed(1)}%</strong><small>Average progress this month</small></div>
-              <div className="stat-card premium"><div className="metric-icon">◉</div><span>Active Goals</span><strong>{activeGoals}</strong><small>Goals in progress</small></div>
-              <div className="stat-card premium"><div className="metric-icon">◈</div><span>Active KPIs</span><strong>{activeKpis}</strong><small>KPIs currently active</small></div>
-              <div className="stat-card premium"><div className="metric-icon">✎</div><span>Entries This Month</span><strong>{entriesThisMonth}</strong><small>Progress updates registered</small></div>
+              <div className="stat-card premium">
+                <span className="sc-label">Progresso Mensal</span>
+                <strong className="sc-value">{summary.overallPercent.toFixed(1)}%</strong>
+                <small className="sc-sub">Média dos KPIs ativos</small>
+              </div>
+              <div className="stat-card premium">
+                <span className="sc-label">Goals Ativos</span>
+                <strong className="sc-value">{activeGoals}</strong>
+                <small className="sc-sub">{activeGoals === 0 ? 'Nenhum goal criado ainda' : `${activeGoals} em andamento`}</small>
+              </div>
+              <div className="stat-card premium">
+                <span className="sc-label">KPIs Ativos</span>
+                <strong className="sc-value">{activeKpis}</strong>
+                <small className="sc-sub">{activeKpis === 0 ? 'Nenhum KPI ativo' : 'KPIs sendo acompanhados'}</small>
+              </div>
+              <div className="stat-card premium">
+                <span className="sc-label">Registros este mês</span>
+                <strong className="sc-value">{entriesThisMonth}</strong>
+                <small className="sc-sub">{entriesThisMonth === 0 ? 'Nenhum registro ainda' : 'Atualizações registradas'}</small>
+              </div>
             </section>
 
+            {/* Activity Tracker */}
             <div className="panel">
-              <div className="panel-header"><h3>Activity Tracker</h3><span className="panel-sub">Your KPI registration consistency over time</span></div>
-              <div className="heatmap-wrap">
-                <div className="heatmap-grid">
-                  {activityHeatmap.map((week, wi) => (
-                    <div key={wi} className="heatmap-week">
-                      {week.map((day) => {
-                        const v = day.value;
-                        const level = v === 0 ? 0 : v === 1 ? 1 : v === 2 ? 2 : v === 3 ? 3 : 4;
-                        return <div key={day.date} className={`heatmap-cell level-${level}`} title={`${v} registro(s) em ${prettyDate(day.date)}`} />;
-                      })}
-                    </div>
-                  ))}
+              <div className="panel-header">
+                <h3>Activity Tracker</h3>
+                <div className="heatmap-stats">
+                  <span className="hm-stat"><strong>{activityStats.activeDays}</strong> dias ativos</span>
+                  <span className="hm-stat-sep">·</span>
+                  <span className="hm-stat">Sequência atual: <strong>{activityStats.currentStreak}</strong></span>
+                  <span className="hm-stat-sep">·</span>
+                  <span className="hm-stat">Melhor: <strong>{activityStats.bestStreak}</strong></span>
                 </div>
-                <div className="heatmap-legend"><span>Less</span><div className="heatmap-cell level-0" /><div className="heatmap-cell level-1" /><div className="heatmap-cell level-2" /><div className="heatmap-cell level-3" /><div className="heatmap-cell level-4" /><span>More</span></div>
               </div>
-              {activityMax === 0 ? <div className="empty-inline">No activity yet. Start registering KPI progress to build your consistency map.</div> : null}
+              {activityMax === 0 ? (
+                <div className="empty-inline">Nenhuma atividade ainda. Registre progresso nos seus KPIs para construir seu mapa de consistência.</div>
+              ) : (
+                <div className="heatmap-wrap">
+                  <div className="heatmap-grid">
+                    {activityHeatmap.map((week, wi) => (
+                      <div key={wi} className="heatmap-week">
+                        {week.map((day) => {
+                          const v = day.value;
+                          const level = v === 0 ? 0 : v === 1 ? 1 : v === 2 ? 2 : v === 3 ? 3 : 4;
+                          return <div key={day.date} className={`heatmap-cell level-${level}`} title={`${v} registro(s) em ${prettyDate(day.date)}`} />;
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="heatmap-legend"><span>Menos</span><div className="heatmap-cell level-0" /><div className="heatmap-cell level-1" /><div className="heatmap-cell level-2" /><div className="heatmap-cell level-3" /><div className="heatmap-cell level-4" /><span>Mais</span></div>
+                </div>
+              )}
             </div>
 
             <div className="two-col-grid">
+              {/* Goal Progress */}
               <div className="panel">
                 <div className="panel-header"><h3>Goal Progress</h3></div>
                 {goalProgress.length === 0 ? (
-                  <EmptyState title="No goals yet" description="Create your first goal to start tracking your progress." ctaLabel="New Goal" onClick={() => { setActiveView('goals'); setEditingGoalId(''); setGoalOpen(true); }} />
+                  <EmptyState title="Nenhum goal ainda" description="Crie seu primeiro goal para começar." ctaLabel="New Goal" onClick={() => { setActiveView('goals'); setEditingGoalId(''); setGoalOpen(true); }} />
                 ) : (
                   <div className="list-wrap">
-                    {goalProgress.map((g) => (
-                      <div className="list-item premium" key={g.goal.id}>
-                        <div className="list-main">
-                          <div className="one-line-row">
-                            <span className="cell-title">{g.goal.title}</span>
-                            <span className="cell-sub-inline"> · {g.kpiCount} KPI{g.kpiCount === 1 ? '' : 's'}</span>
+                    {goalProgress.map((g) => {
+                      const pct = g.progress.toFixed(0);
+                      const progColor = g.progress >= 80 ? '#16a34a' : g.progress >= 40 ? 'var(--accent)' : g.progress === 0 ? '#d1d5db' : 'var(--accent)';
+                      return (
+                        <div
+                          className="gp-item"
+                          key={g.goal.id}
+                          onClick={() => { setSelectedGoalDetailId(g.goal.id); setActiveView('goals'); }}
+                        >
+                          <div className="gp-header">
+                            <span className="gp-title">{g.goal.title}</span>
+                            <span className="gp-pct" style={{ color: progColor }}>{pct}%</span>
                           </div>
-                          <div className="progress-track compact-wide"><div className="progress-fill" style={{ width: `${g.visual}%` }} /></div>
+                          <div className="gp-track">
+                            <div className="gp-fill" style={{ width: `${g.visual}%`, background: progColor }} />
+                          </div>
+                          <span className="gp-meta">{g.kpiCount} KPI{g.kpiCount !== 1 ? 's' : ''}</span>
                         </div>
-                        <div className="list-side">{g.progress.toFixed(0)}%</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
+              {/* Needs Attention */}
               <div className="panel">
-                <div className="panel-header"><h3>Needs Attention</h3></div>
+                <div className="panel-header"><h3>Needs Attention</h3><span className="panel-sub">KPIs com baixo progresso</span></div>
                 {needsAttention.length === 0 ? (
-                  <div className="empty-inline">No low-progress KPIs right now.</div>
+                  <div className="empty-inline" style={{ color: '#16a34a' }}>Tudo em dia. Nenhum KPI com baixo progresso.</div>
                 ) : (
                   <div className="list-wrap">
-                    {needsAttention.map(({ kpi, initiative, p }) => (
-                      <div className="list-item attention premium" key={kpi.id}>
-                        <div className="list-main">
-                          <div className="inline-badges"><span className="tiny-badge warning">Low progress</span><span className="tiny-badge neutral">{kpi.periodType}</span></div>
-                          <div className="one-line-row">
-                            <span className="cell-title">{initiative?.title || 'Sem initiative'}</span>
-                            <span className="cell-sub-inline"> · {kpi.name} · {p?.currentValue ?? 0} / {kpi.targetValue} {kpi.unit} · {(p?.percentage ?? 0).toFixed(0)}%</span>
+                    {needsAttention.map(({ kpi, initiative, p, goal }, idx) => {
+                      const pct = p?.percentage ?? 0;
+                      const isFirst = idx === 0;
+                      return (
+                        <div className={`na-item${isFirst ? ' na-item-critical' : ''}`} key={kpi.id}>
+                          <div className="na-main">
+                            <div className="na-top">
+                              <span className="na-kpi">{kpi.name}</span>
+                              <span className={`na-pct${pct < 20 ? ' na-pct-danger' : ''}`}>{pct.toFixed(0)}%</span>
+                            </div>
+                            <span className="na-meta">{goal?.title}{initiative ? ` · ${initiative.title}` : ''}</span>
+                            <div className="na-track">
+                              <div className="na-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+                            </div>
                           </div>
+                          <button className="icon-btn na-btn" onClick={() => { setRegisterGoalId(kpi.goalId); setRegisterInitiativeId(kpi.initiativeId || ''); setSelectedKpiId(kpi.id); setRegisterOpen(true); }}>⊕</button>
                         </div>
-                        <button className="icon-btn" onClick={() => { setRegisterGoalId(kpi.goalId); setRegisterInitiativeId(kpi.initiativeId || ''); setSelectedKpiId(kpi.id); setRegisterOpen(true); }}>Register</button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -591,46 +649,92 @@ export default function App() {
           <section className="content-grid">
             <div className="breadcrumb"><button className="crumb" onClick={() => setSelectedGoalDetailId('')}>Goals</button> <span>/</span> <span>{currentGoal.title}</span></div>
 
-            <div className="panel">
-              <div className="panel-header"><h3>{currentGoal.title}</h3></div>
-              <div className="goal-detail-summary">
-                <div><strong>Status</strong><StatusBadge status={currentGoal.status} /></div>
-                <div><strong>Progress</strong><span>{(goalCards.find((g) => g.goal.id === currentGoal.id)?.progress ?? 0).toFixed(0)}%</span></div>
-                <div><strong>Initiatives</strong><span>{scopedInitiatives.length}</span></div>
-                <div><strong>KPIs</strong><span>{scopedKpis.length}</span></div>
-              </div>
-            </div>
+            {/* Goal summary cards */}
+            {(() => {
+              const gCard = goalCards.find(g => g.goal.id === currentGoal.id);
+              const prog = gCard?.progress ?? 0;
+              const progColor = prog >= 100 ? '#16a34a' : prog >= 80 ? '#16a34a' : prog >= 40 ? 'var(--accent)' : prog === 0 ? '#d1d5db' : 'var(--accent)';
+              return (
+                <div className="gd-summary-bar">
+                  <div className="gd-summary-card">
+                    <span className="gd-sc-label">Progresso</span>
+                    <span className="gd-sc-value" style={{ color: progColor }}>{prog.toFixed(0)}%</span>
+                    <div className="gd-sc-track"><div className="gd-sc-fill" style={{ width: `${Math.min(prog, 100)}%`, background: progColor }} /></div>
+                  </div>
+                  <div className="gd-summary-card">
+                    <span className="gd-sc-label">Initiatives</span>
+                    <span className="gd-sc-value">{scopedInitiatives.length}</span>
+                  </div>
+                  <div className="gd-summary-card">
+                    <span className="gd-sc-label">KPIs</span>
+                    <span className="gd-sc-value">{scopedKpis.length}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
-            <div className="panel">
+            {/* KPI table */}
+            <div className="panel history-panel">
               <div className="panel-header"><h3>KPIs</h3></div>
               {scopedKpis.length === 0 ? (
                 <EmptyState title="No KPIs yet" description="Create your first KPI for this goal." ctaLabel="New KPI" onClick={() => setKpiOpen(true)} />
               ) : (
-                <table className="data-table kpi-table">
-                  <thead><tr><th>Initiative</th><th>KPI</th><th>Current</th><th>Target</th><th>Progress</th><th>Period</th><th>Status</th><th>Actions</th></tr></thead>
-                  <tbody>
-                    {scopedKpis.map((k) => {
-                      const initiative = initiatives.find((i) => i.id === k.initiativeId);
-                      const p = progressMap[k.id];
-                      return (
-                        <tr key={k.id}>
-                          <td>{initiative?.title || '-'}</td>
-                          <td><div className="cell-title">{k.name}</div></td>
-                          <td>{p?.currentValue ?? 0}</td>
-                          <td>{k.targetValue} {k.unit}</td>
-                          <td><ProgressCell progress={p} /></td>
-                          <td>{k.periodType}</td>
-                          <td><StatusBadge status={p?.progressStatus || k.status} /></td>
-                          <td>
-                            <button className="icon-btn" onClick={() => { setRegisterGoalId(k.goalId); setRegisterInitiativeId(k.initiativeId || ''); setSelectedKpiId(k.id); setEntryValue('1'); setEntryDate(today()); setEntryComment(''); setEditingEntryId(''); setRegisterOpen(true); }}>⊕</button>
-                            <button className="icon-btn" title="Archive" onClick={() => appApi().ArchiveKPI(k.id).then(refreshAll)}>◌</button>
-                            <button className="icon-btn danger" title="Delete" onClick={() => setDeleteKpiId(k.id)}>✕</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="gd-kpi-table-wrap">
+                  <table className="reviews-table gd-kpi-table">
+                    <thead>
+                      <tr>
+                        <th className="gd-col-init">Initiative</th>
+                        <th className="gd-col-kpi">KPI</th>
+                        <th className="col-num">Atual</th>
+                        <th className="col-num">Meta</th>
+                        <th className="col-num">Unidade</th>
+                        <th>Progresso</th>
+                        <th className="col-num">Período</th>
+                        <th className="col-num">Status</th>
+                        <th className="col-num">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scopedKpis.map((k) => {
+                        const initiative = initiatives.find(i => i.id === k.initiativeId);
+                        const p = progressMap[k.id];
+                        const pct = p?.percentage ?? 0;
+                        const visual = Math.min(pct, 100);
+                        const barColor = pct >= 100 ? '#16a34a' : 'var(--accent)';
+                        return (
+                          <tr key={k.id}>
+                            <td className="gd-col-init" title={initiative?.title || ''}><span className="ht-secondary">{initiative?.title || '—'}</span></td>
+                            <td className="gd-col-kpi" title={k.name}><span className="col-name-primary">{k.name}</span></td>
+                            <td className="col-num"><strong>{p?.currentValue ?? 0}</strong></td>
+                            <td className="col-num">{k.targetValue}</td>
+                            <td className="col-num"><span className="unit-pill unit-pill-sm">{translateUnit(k.unit, k.customUnit)}</span></td>
+                            <td>
+                              <div className="prog-wrap">
+                                <div className="prog-bar"><div className="prog-fill" style={{ width: `${visual}%`, background: barColor }} /></div>
+                                <span className="prog-label">{pct.toFixed(0)}%</span>
+                              </div>
+                            </td>
+                            <td className="col-num" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{translatePeriod(k.periodType)}</td>
+                            <td className="col-num"><StatusBadge status={p?.progressStatus || k.status} /></td>
+                            <td className="col-num gd-actions-cell">
+                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                <div className="ht-action-wrap" data-tip="Registrar">
+                                  <button className="icon-btn" onClick={() => { setRegisterGoalId(k.goalId); setRegisterInitiativeId(k.initiativeId || ''); setSelectedKpiId(k.id); setEntryValue('1'); setEntryDate(today()); setEntryComment(''); setEditingEntryId(''); setRegisterOpen(true); }}>⊕</button>
+                                </div>
+                                <div className="ht-action-wrap" data-tip="Arquivar">
+                                  <button className="icon-btn" onClick={() => appApi().ArchiveKPI(k.id).then(refreshAll)}>◌</button>
+                                </div>
+                                <div className="ht-action-wrap" data-tip="Excluir">
+                                  <button className="icon-btn danger" onClick={() => setDeleteKpiId(k.id)}>✕</button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </section>
@@ -646,10 +750,6 @@ export default function App() {
                 <option value="">Todos os Goals</option>
                 {goals.filter(g => g.status !== 'archived').map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
               </select>
-              <select className="history-filter-input history-filter-kpi" value={historyFilterKpi} onChange={e => { setHistoryFilterKpi(e.target.value); triggerHistoryFilter(); }}>
-                <option value="">Todos os KPIs</option>
-                {kpis.filter(k => k.status !== 'archived' && (!historyFilterGoal || k.goalId === historyFilterGoal)).map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
-              </select>
               <input
                 className="history-filter-input history-filter-search"
                 type="search"
@@ -659,7 +759,7 @@ export default function App() {
               />
               <button
                 className="btn btn-ghost btn-sm history-filter-clear"
-                disabled={!historyFilterGoal && !historyFilterKpi && !historyFilterText && !historyFilterDateFrom && !historyFilterDateTo}
+                disabled={!historyFilterGoal && !historyFilterText && !historyFilterDateFrom && !historyFilterDateTo}
                 onClick={() => { setHistoryFilterGoal(''); setHistoryFilterKpi(''); setHistoryFilterText(''); setHistoryFilterDateFrom(''); setHistoryFilterDateTo(''); triggerHistoryFilter(); }}
               >
                 Limpar
@@ -975,6 +1075,7 @@ export default function App() {
                                     const deltaClass = c.delta > 0 ? 'delta-pos' : c.delta < 0 ? 'delta-neg' : 'delta-zero';
                                     const progB = c.progressB ?? 0;
                                     const progBarWidth = Math.min(progB, 100);
+                                    const progBarColor = progB >= 100 ? '#16a34a' : 'var(--accent)';
                                     return (
                                       <tr key={c.kpiId} className={hasData ? '' : 'row-dim'}>
                                         <td className="col-name">
@@ -996,7 +1097,7 @@ export default function App() {
                                           {c.progressB !== null ? (
                                             <div className="prog-wrap">
                                               <div className="prog-bar">
-                                                <div className="prog-fill" style={{ width: `${progBarWidth}%` }} />
+                                                <div className="prog-fill" style={{ width: `${progBarWidth}%`, background: progBarColor }} />
                                               </div>
                                               <span className="prog-label">{progB.toFixed(0)}%</span>
                                             </div>
@@ -1021,6 +1122,7 @@ export default function App() {
             )}
           </div>
         ) : null}
+        </div>{/* end main-content */}
       </div>
 
       <Modal open={!!deleteKpiId} title="Delete KPI" onClose={() => setDeleteKpiId('')}>
