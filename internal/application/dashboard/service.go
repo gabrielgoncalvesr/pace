@@ -74,7 +74,7 @@ func (s *Service) calculateProgress(item *kpi.KPI) (*kpi.Progress, error) {
 	if item.TargetValue <= 0 {
 		return nil, errors.New("target_value must be greater than zero")
 	}
-	start, end := resolvePeriod(item.PeriodType, item.CreatedAt, time.Now())
+	start, end := resolvePeriod(item.PeriodType, time.Now())
 	current, err := s.entries.SumByKPIAndDateRange(item.ID, start, end)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *Service) calculateProgress(item *kpi.KPI) (*kpi.Progress, error) {
 	}, nil
 }
 
-func resolvePeriod(periodType kpi.PeriodType, createdAt, now time.Time) (time.Time, time.Time) {
+func resolvePeriod(periodType kpi.PeriodType, now time.Time) (time.Time, time.Time) {
 	loc := now.Location()
 	y, m, d := now.In(loc).Date()
 	switch periodType {
@@ -122,7 +122,7 @@ func resolvePeriod(periodType kpi.PeriodType, createdAt, now time.Time) (time.Ti
 		end := time.Date(y, time.December, 31, 23, 59, 59, int(time.Second-time.Nanosecond), loc)
 		return start, end
 	case kpi.PeriodPunctual:
-		return createdAt, now
+		return time.Time{}, now
 	case kpi.PeriodCustom:
 		fallthrough
 	case kpi.PeriodMonthly:

@@ -42,7 +42,7 @@ func TestProgressStatus(t *testing.T) {
 
 func TestResolvePeriodMonthly(t *testing.T) {
 	now := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
-	start, end := resolvePeriod(kpi.PeriodMonthly, now.AddDate(0, -1, 0), now)
+	start, end := resolvePeriod(kpi.PeriodMonthly, now)
 	if start.Day() != 1 || start.Month() != time.May || start.Year() != 2026 {
 		t.Fatalf("unexpected start: %v", start)
 	}
