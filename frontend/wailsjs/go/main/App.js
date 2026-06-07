@@ -94,6 +94,10 @@ export function SetKPISuccessor(arg1, arg2) {
   return window['go']['main']['App']['SetKPISuccessor'](arg1, arg2);
 }
 
+export function UnarchiveKPI(arg1) {
+  return window['go']['main']['App']['UnarchiveKPI'](arg1);
+}
+
 export function UpdateGoal(arg1, arg2) {
   return window['go']['main']['App']['UpdateGoal'](arg1, arg2);
 }

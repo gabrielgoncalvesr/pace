@@ -351,6 +351,10 @@ func (a *App) ArchiveKPI(id string) error {
 	return a.kpiService.Archive(id)
 }
 
+func (a *App) UnarchiveKPI(id string) error {
+	return a.kpiService.Unarchive(id)
+}
+
 func (a *App) DeleteKPI(id string) error {
 	return a.kpiService.Delete(id)
 }

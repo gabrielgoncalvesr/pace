@@ -49,6 +49,22 @@ func (r *KPISQLiteRepository) Update(item *kpi.KPI) error {
 	return nil
 }
 
+func (r *KPISQLiteRepository) Unarchive(id string) error {
+	res, err := r.db.Exec(`
+		UPDATE kpis
+		SET status = 'active', updated_at = ?, archived_at = NULL
+		WHERE id = ?
+	`, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("unarchive kpi: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return errors.New("kpi not found")
+	}
+	return nil
+}
+
 func (r *KPISQLiteRepository) Archive(id string) error {
 	now := time.Now()
 	res, err := r.db.Exec(`

@@ -31,7 +31,9 @@ type WailsApp = {
   ArchiveInitiative(id: string): Promise<void>;
   ListInitiatives(): Promise<Initiative[]>;
   CreateKPI(input: { goalId: string; initiativeId: string; name: string; description: string; unit: string; customUnit: string; targetValue: number; periodType: string; allowExceedTarget: boolean }): Promise<KPI>;
+  UpdateKPI(id: string, input: { name: string; description: string; unit: string; customUnit: string; targetValue: number; periodType: string; allowExceedTarget: boolean; status: string }): Promise<KPI>;
   ArchiveKPI(id: string): Promise<void>;
+  UnarchiveKPI(id: string): Promise<void>;
   DeleteKPI(id: string): Promise<void>;
   ListKPIs(): Promise<KPI[]>;
   RegisterKPIEntry(input: { kpiId: string; value: number; entryDate: string; comment: string }): Promise<KPIEntry>;
@@ -47,7 +49,7 @@ type WailsApp = {
 };
 
 const appApi = () => (window as any).go.main.App as WailsApp;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const prettyDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const COMMENT_MAX_CHARS = 72;
 
@@ -166,6 +168,14 @@ export default function App() {
 
   const [deleteKpiId, setDeleteKpiId] = useState('');
 
+  const [editKpiId, setEditKpiId] = useState('');
+  const [editKpiName, setEditKpiName] = useState('');
+  const [editKpiTarget, setEditKpiTarget] = useState('1');
+  const [editKpiDescription, setEditKpiDescription] = useState('');
+  const [editKpiPeriod, setEditKpiPeriod] = useState('monthly');
+  const [editKpiOpen, setEditKpiOpen] = useState(false);
+  const [openKpiMenu, setOpenKpiMenu] = useState<string | null>(null);
+
   const [goalOpen, setGoalOpen] = useState(false);
   const [initiativeOpen, setInitiativeOpen] = useState(false);
   const [kpiOpen, setKpiOpen] = useState(false);
@@ -188,7 +198,7 @@ export default function App() {
 
   const goalProgress = useMemo(() => goals.filter((g) => g.status !== 'archived').map((goal) => {
     const goalKpis = kpis.filter((k) => k.goalId === goal.id && k.status !== 'archived');
-    const avg = goalKpis.length ? goalKpis.reduce((acc, k) => acc + (progressMap[k.id]?.percentage ?? 0), 0) / goalKpis.length : 0;
+    const avg = goalKpis.length ? goalKpis.reduce((acc, k) => acc + Math.min(progressMap[k.id]?.percentage ?? 0, 100), 0) / goalKpis.length : 0;
     return { goal, kpiCount: goalKpis.length, progress: avg, visual: Math.min(avg, 100) };
   }), [goals, kpis, progressMap]);
 
@@ -218,7 +228,7 @@ export default function App() {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(end);
       d.setDate(end.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       values.push({ date: key, value: dayMap.get(key) || 0 });
     }
 
@@ -245,7 +255,7 @@ export default function App() {
   const goalCards = useMemo(() => goals.filter((g) => g.status !== 'archived').map((goal) => {
     const goalInitiatives = initiatives.filter((i) => i.goalId === goal.id && i.status !== 'archived');
     const goalKpis = kpis.filter((k) => k.goalId === goal.id && k.status !== 'archived');
-    const avg = goalKpis.length ? goalKpis.reduce((acc, k) => acc + (progressMap[k.id]?.percentage ?? 0), 0) / goalKpis.length : 0;
+    const avg = goalKpis.length ? goalKpis.reduce((acc, k) => acc + Math.min(progressMap[k.id]?.percentage ?? 0, 100), 0) / goalKpis.length : 0;
     return {
       goal,
       initiativeCount: goalInitiatives.length,
@@ -320,13 +330,14 @@ export default function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (registerOpen) return setRegisterOpen(false);
+      if (editKpiOpen) return setEditKpiOpen(false);
       if (kpiOpen) return setKpiOpen(false);
       if (initiativeOpen) return setInitiativeOpen(false);
       if (goalOpen) return setGoalOpen(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [goalOpen, initiativeOpen, kpiOpen, registerOpen]);
+  }, [goalOpen, initiativeOpen, kpiOpen, registerOpen, editKpiOpen]);
 
   async function handleCreateOrEditGoal(e: FormEvent) {
     e.preventDefault();
@@ -385,8 +396,24 @@ export default function App() {
     setEntryComment('');
     setRegisterOpen(false);
     await refreshAll();
-    setToast('Registro salvo com sucesso!');
+    setToast('Entry saved!');
     setTimeout(() => setToast(''), 3000);
+  }
+
+  async function handleUpdateKpi(e: FormEvent) {
+    e.preventDefault();
+    await appApi().UpdateKPI(editKpiId, {
+      name: editKpiName,
+      description: editKpiDescription,
+      unit: '',
+      customUnit: '',
+      targetValue: Number(editKpiTarget),
+      periodType: editKpiPeriod,
+      allowExceedTarget: true,
+      status: 'active',
+    });
+    setEditKpiOpen(false);
+    await refreshAll();
   }
 
   const handleCreateSnapshot = async (e: FormEvent) => {
@@ -473,24 +500,24 @@ export default function App() {
             {/* Stat cards */}
             <section className="stats-grid">
               <div className="stat-card premium">
-                <span className="sc-label">Progresso Mensal</span>
+                <span className="sc-label">Monthly Progress</span>
                 <strong className="sc-value">{summary.overallPercent.toFixed(1)}%</strong>
-                <small className="sc-sub">Média dos KPIs ativos</small>
+                <small className="sc-sub">Average of active KPIs</small>
               </div>
               <div className="stat-card premium">
-                <span className="sc-label">Goals Ativos</span>
+                <span className="sc-label">Active Goals</span>
                 <strong className="sc-value">{activeGoals}</strong>
-                <small className="sc-sub">{activeGoals === 0 ? 'Nenhum goal criado ainda' : `${activeGoals} em andamento`}</small>
+                <small className="sc-sub">{activeGoals === 0 ? 'No goals yet' : `${activeGoals} in progress`}</small>
               </div>
               <div className="stat-card premium">
-                <span className="sc-label">KPIs Ativos</span>
+                <span className="sc-label">Active KPIs</span>
                 <strong className="sc-value">{activeKpis}</strong>
-                <small className="sc-sub">{activeKpis === 0 ? 'Nenhum KPI ativo' : 'KPIs sendo acompanhados'}</small>
+                <small className="sc-sub">{activeKpis === 0 ? 'No active KPIs' : 'KPIs being tracked'}</small>
               </div>
               <div className="stat-card premium">
-                <span className="sc-label">Registros este mês</span>
+                <span className="sc-label">Entries this month</span>
                 <strong className="sc-value">{entriesThisMonth}</strong>
-                <small className="sc-sub">{entriesThisMonth === 0 ? 'Nenhum registro ainda' : 'Atualizações registradas'}</small>
+                <small className="sc-sub">{entriesThisMonth === 0 ? 'No entries yet' : 'Updates recorded'}</small>
               </div>
             </section>
 
@@ -499,15 +526,15 @@ export default function App() {
               <div className="panel-header">
                 <h3>Activity Tracker</h3>
                 <div className="heatmap-stats">
-                  <span className="hm-stat"><strong>{activityStats.activeDays}</strong> dias ativos</span>
+                  <span className="hm-stat"><strong>{activityStats.activeDays}</strong> active days</span>
                   <span className="hm-stat-sep">·</span>
-                  <span className="hm-stat">Sequência atual: <strong>{activityStats.currentStreak}</strong></span>
+                  <span className="hm-stat">Current streak: <strong>{activityStats.currentStreak}</strong></span>
                   <span className="hm-stat-sep">·</span>
-                  <span className="hm-stat">Melhor: <strong>{activityStats.bestStreak}</strong></span>
+                  <span className="hm-stat">Best: <strong>{activityStats.bestStreak}</strong></span>
                 </div>
               </div>
               {activityMax === 0 ? (
-                <div className="empty-inline">Nenhuma atividade ainda. Registre progresso nos seus KPIs para construir seu mapa de consistência.</div>
+                <div className="empty-inline">No activity yet. Log entries on your KPIs to build your consistency map.</div>
               ) : (
                 <div className="heatmap-wrap">
                   <div className="heatmap-grid">
@@ -516,12 +543,12 @@ export default function App() {
                         {week.map((day) => {
                           const v = day.value;
                           const level = v === 0 ? 0 : v === 1 ? 1 : v === 2 ? 2 : v === 3 ? 3 : 4;
-                          return <div key={day.date} className={`heatmap-cell level-${level}`} title={`${v} registro(s) em ${prettyDate(day.date)}`} />;
+                          return <div key={day.date} className={`heatmap-cell level-${level}`} title={`${v} entr${v === 1 ? 'y' : 'ies'} on ${prettyDate(day.date)}`} />;
                         })}
                       </div>
                     ))}
                   </div>
-                  <div className="heatmap-legend"><span>Menos</span><div className="heatmap-cell level-0" /><div className="heatmap-cell level-1" /><div className="heatmap-cell level-2" /><div className="heatmap-cell level-3" /><div className="heatmap-cell level-4" /><span>Mais</span></div>
+                  <div className="heatmap-legend"><span>Less</span><div className="heatmap-cell level-0" /><div className="heatmap-cell level-1" /><div className="heatmap-cell level-2" /><div className="heatmap-cell level-3" /><div className="heatmap-cell level-4" /><span>More</span></div>
                 </div>
               )}
             </div>
@@ -531,7 +558,7 @@ export default function App() {
               <div className="panel">
                 <div className="panel-header"><h3>Goal Progress</h3></div>
                 {goalProgress.length === 0 ? (
-                  <EmptyState title="Nenhum goal ainda" description="Crie seu primeiro goal para começar." ctaLabel="New Goal" onClick={() => { setActiveView('goals'); setEditingGoalId(''); setGoalOpen(true); }} />
+                  <EmptyState title="No goals yet" description="Create your first goal to get started." ctaLabel="New Goal" onClick={() => { setActiveView('goals'); setEditingGoalId(''); setGoalOpen(true); }} />
                 ) : (
                   <div className="list-wrap">
                     {goalProgress.map((g) => {
@@ -560,9 +587,9 @@ export default function App() {
 
               {/* Needs Attention */}
               <div className="panel">
-                <div className="panel-header"><h3>Needs Attention</h3><span className="panel-sub">KPIs com baixo progresso</span></div>
+                <div className="panel-header"><h3>Needs Attention</h3><span className="panel-sub">KPIs with low progress</span></div>
                 {needsAttention.length === 0 ? (
-                  <div className="empty-inline" style={{ color: '#16a34a' }}>Tudo em dia. Nenhum KPI com baixo progresso.</div>
+                  <div className="empty-inline" style={{ color: '#16a34a' }}>All good. No KPIs with low progress.</div>
                 ) : (
                   <div className="list-wrap">
                     {needsAttention.map(({ kpi, initiative, p, goal }, idx) => {
@@ -580,7 +607,7 @@ export default function App() {
                               <div className="na-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
                             </div>
                           </div>
-                          <button className="icon-btn na-btn" onClick={() => { setRegisterGoalId(kpi.goalId); setRegisterInitiativeId(kpi.initiativeId || ''); setSelectedKpiId(kpi.id); setRegisterOpen(true); }}>⊕</button>
+                          <button className="icon-btn na-btn" disabled={kpi.periodType === 'punctual' && (historyByKpi[kpi.id]?.length ?? 0) > 0} onClick={() => { setRegisterGoalId(kpi.goalId); setRegisterInitiativeId(kpi.initiativeId || ''); setSelectedKpiId(kpi.id); setRegisterOpen(true); }}>⊕</button>
                         </div>
                       );
                     })}
@@ -608,7 +635,7 @@ export default function App() {
                         <StatusBadge status={item.goal.status} />
                         <button
                           className="gc-archive-btn"
-                          title="Arquivar"
+                          title="Archive"
                           onClick={(e) => { e.stopPropagation(); appApi().ArchiveGoal(item.goal.id).then(refreshAll); }}
                         >
                           ◌
@@ -617,7 +644,7 @@ export default function App() {
                       <h3 className="gc-title">{item.goal.title}</h3>
                       <div className="gc-progress">
                         <div className="gc-progress-header">
-                          <span className="gc-progress-label">Progresso</span>
+                          <span className="gc-progress-label">Progress</span>
                           <span className="gc-progress-pct" style={{ color: progColor }}>{item.progress.toFixed(0)}%</span>
                         </div>
                         <div className="gc-track">
@@ -657,7 +684,7 @@ export default function App() {
               return (
                 <div className="gd-summary-bar">
                   <div className="gd-summary-card">
-                    <span className="gd-sc-label">Progresso</span>
+                    <span className="gd-sc-label">Progress</span>
                     <span className="gd-sc-value" style={{ color: progColor }}>{prog.toFixed(0)}%</span>
                     <div className="gd-sc-track"><div className="gd-sc-fill" style={{ width: `${Math.min(prog, 100)}%`, background: progColor }} /></div>
                   </div>
@@ -685,13 +712,13 @@ export default function App() {
                       <tr>
                         <th className="gd-col-init">Initiative</th>
                         <th className="gd-col-kpi">KPI</th>
-                        <th className="col-num">Atual</th>
-                        <th className="col-num">Meta</th>
-                        <th className="col-num">Unidade</th>
-                        <th>Progresso</th>
-                        <th className="col-num">Período</th>
+                        <th className="col-num">Current</th>
+                        <th className="col-num">Target</th>
+                        <th className="col-num">Unit</th>
+                        <th>Progress</th>
+                        <th className="col-num">Period</th>
                         <th className="col-num">Status</th>
-                        <th className="col-num">Ações</th>
+                        <th className="col-num">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -717,15 +744,19 @@ export default function App() {
                             <td className="col-num" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{translatePeriod(k.periodType)}</td>
                             <td className="col-num"><StatusBadge status={p?.progressStatus || k.status} /></td>
                             <td className="col-num gd-actions-cell">
-                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                <div className="ht-action-wrap" data-tip="Registrar">
-                                  <button className="icon-btn" onClick={() => { setRegisterGoalId(k.goalId); setRegisterInitiativeId(k.initiativeId || ''); setSelectedKpiId(k.id); setEntryValue('1'); setEntryDate(today()); setEntryComment(''); setEditingEntryId(''); setRegisterOpen(true); }}>⊕</button>
+                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <div className="ht-action-wrap" data-tip={k.periodType === 'punctual' && (historyByKpi[k.id]?.length ?? 0) > 0 ? 'Pontual: já registrado' : 'Register'}>
+                                  <button className="icon-btn" disabled={k.periodType === 'punctual' && (historyByKpi[k.id]?.length ?? 0) > 0} onClick={() => { setRegisterGoalId(k.goalId); setRegisterInitiativeId(k.initiativeId || ''); setSelectedKpiId(k.id); setEntryValue('1'); setEntryDate(today()); setEntryComment(''); setEditingEntryId(''); setRegisterOpen(true); }}>⊕</button>
                                 </div>
-                                <div className="ht-action-wrap" data-tip="Arquivar">
-                                  <button className="icon-btn" onClick={() => appApi().ArchiveKPI(k.id).then(refreshAll)}>◌</button>
-                                </div>
-                                <div className="ht-action-wrap" data-tip="Excluir">
-                                  <button className="icon-btn danger" onClick={() => setDeleteKpiId(k.id)}>✕</button>
+                                <div className="kpi-menu-wrap">
+                                  <button className="icon-btn kpi-menu-trigger" onClick={() => setOpenKpiMenu(openKpiMenu === k.id ? null : k.id)}>···</button>
+                                  {openKpiMenu === k.id && (
+                                    <div className="kpi-dropdown" onMouseLeave={() => setOpenKpiMenu(null)}>
+                                      <button onClick={() => { setEditKpiId(k.id); setEditKpiName(k.name); setEditKpiTarget(String(k.targetValue)); setEditKpiDescription(k.description || ''); setEditKpiPeriod(k.periodType); setEditKpiOpen(true); setOpenKpiMenu(null); }}>✎ Edit</button>
+                                      <button onClick={() => { if (confirm('Archive this KPI?')) { appApi().ArchiveKPI(k.id).then(refreshAll); } setOpenKpiMenu(null); }}>◌ Archive</button>
+                                      <button className="danger" onClick={() => { setDeleteKpiId(k.id); setOpenKpiMenu(null); }}>✕ Delete</button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -744,16 +775,16 @@ export default function App() {
           <section className="content-grid">
             {/* Filters */}
             <div className="history-filters">
-              <DatePickerField value={historyFilterDateFrom} onChange={v => { setHistoryFilterDateFrom(v); triggerHistoryFilter(); }} placeholder="De" />
-              <DatePickerField value={historyFilterDateTo} onChange={v => { setHistoryFilterDateTo(v); triggerHistoryFilter(); }} placeholder="Até" />
+              <DatePickerField value={historyFilterDateFrom} onChange={v => { setHistoryFilterDateFrom(v); triggerHistoryFilter(); }} placeholder="From" />
+              <DatePickerField value={historyFilterDateTo} onChange={v => { setHistoryFilterDateTo(v); triggerHistoryFilter(); }} placeholder="To" />
               <select className="history-filter-input history-filter-goal" value={historyFilterGoal} onChange={e => { setHistoryFilterGoal(e.target.value); setHistoryFilterKpi(''); triggerHistoryFilter(); }}>
-                <option value="">Todos os Goals</option>
+                <option value="">All Goals</option>
                 {goals.filter(g => g.status !== 'archived').map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
               </select>
               <input
                 className="history-filter-input history-filter-search"
                 type="search"
-                placeholder="Buscar comentário…"
+                placeholder="Search comment…"
                 value={historyFilterText}
                 onChange={e => { setHistoryFilterText(e.target.value); triggerHistoryFilter(); }}
               />
@@ -762,7 +793,7 @@ export default function App() {
                 disabled={!historyFilterGoal && !historyFilterText && !historyFilterDateFrom && !historyFilterDateTo}
                 onClick={() => { setHistoryFilterGoal(''); setHistoryFilterKpi(''); setHistoryFilterText(''); setHistoryFilterDateFrom(''); setHistoryFilterDateTo(''); triggerHistoryFilter(); }}
               >
-                Limpar
+                Clear
               </button>
             </div>
 
@@ -779,7 +810,7 @@ export default function App() {
                 });
 
                 if (filtered.length === 0) return (
-                  <EmptyState title="Nenhum registro encontrado" description="Tente ajustar os filtros ou registre um novo valor." ctaLabel="Quick Register" onClick={() => { setRegisterGoalId(''); setRegisterInitiativeId(''); setSelectedKpiId(''); setRegisterOpen(true); }} />
+                  <EmptyState title="No entries found" description="Try adjusting the filters or log a new value." ctaLabel="Quick Register" onClick={() => { setRegisterGoalId(''); setRegisterInitiativeId(''); setSelectedKpiId(''); setRegisterOpen(true); }} />
                 );
 
                 // group by date
@@ -794,12 +825,12 @@ export default function App() {
                   <table className="data-table history-table">
                     <thead>
                       <tr>
-                        <th className="ht-date">Data</th>
+                        <th className="ht-date">Date</th>
                         <th className="ht-goal">Goal</th>
                         <th className="ht-kpi">KPI</th>
-                        <th className="ht-val">Valor</th>
-                        <th className="ht-comment">Comentário</th>
-                        <th className="ht-actions">Ações</th>
+                        <th className="ht-val">Value</th>
+                        <th className="ht-comment">Comment</th>
+                        <th className="ht-actions">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -822,7 +853,7 @@ export default function App() {
                                     <div className="history-tooltip-bubble">
                                       {kGoal && <div><strong>Goal:</strong> {kGoal.title}</div>}
                                       {kInit && <div><strong>Initiative:</strong> {kInit.title}</div>}
-                                      <div><strong>Valor:</strong> {e.value}</div>
+                                      <div><strong>Value:</strong> {e.value}</div>
                                     </div>
                                   </div>
                                 ) : '—'}
@@ -837,10 +868,10 @@ export default function App() {
                                 ) : <span className="ht-empty">—</span>}
                               </td>
                               <td className="ht-actions">
-                                <div className="ht-action-wrap" data-tip="Editar">
+                                <div className="ht-action-wrap" data-tip="Edit">
                                   <button className="icon-btn" onClick={() => { setEditingEntryId(e.id); setEntryValue(String(e.value)); setEntryDate(e.entryDate); setEntryComment(e.comment || ''); setRegisterOpen(true); }}>✎</button>
                                 </div>
-                                <div className="ht-action-wrap" data-tip="Excluir">
+                                <div className="ht-action-wrap" data-tip="Delete">
                                   <button className="icon-btn danger" onClick={() => appApi().DeleteKPIEntry(e.id).then(refreshAll)}>✕</button>
                                 </div>
                               </td>
@@ -862,9 +893,9 @@ export default function App() {
               <div className="panel-header"><h3>Archived KPIs</h3></div>
               {archivedKpis.length === 0 ? (
                 <EmptyState
-                  title="Nenhuma KPI arquivada"
-                  description="As KPIs arquivadas aparecerão aqui."
-                  ctaLabel="Ir para KPIs"
+                  title="No archived KPIs"
+                  description="Archived KPIs will appear here."
+                  ctaLabel="Go to KPIs"
                   onClick={() => setActiveView('goals')}
                 />
               ) : (
@@ -878,6 +909,7 @@ export default function App() {
                       <th>Period</th>
                       <th>Archived At</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -893,6 +925,7 @@ export default function App() {
                           <td>{kpi.periodType}</td>
                           <td>{kpi.archivedAt ? prettyDate(kpi.archivedAt.slice(0, 10)) : '-'}</td>
                           <td><StatusBadge status={kpi.status} /></td>
+                          <td><button className="btn btn-ghost btn-sm" onClick={() => appApi().UnarchiveKPI(kpi.id).then(refreshAll)}>Restore</button></td>
                         </tr>
                       );
                     })}
@@ -908,33 +941,33 @@ export default function App() {
             {/* Page header */}
             <div className="reviews-page-header">
               <div className="reviews-page-header-text">
-                <h2 className="reviews-title">Comparativo de KPIs</h2>
-                <p className="reviews-subtitle">Compare a evolução dos seus indicadores entre dois cortes de período.</p>
+                <h2 className="reviews-title">KPI Comparison</h2>
+                <p className="reviews-subtitle">Compare your KPI progress between two period snapshots.</p>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setNewSnapOpen(true)}>+ Novo Corte</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setNewSnapOpen(true)}>+ New Snapshot</button>
             </div>
 
-            <Modal open={newSnapOpen} title="Novo Corte" onClose={() => setNewSnapOpen(false)}>
+            <Modal open={newSnapOpen} title="New Snapshot" onClose={() => setNewSnapOpen(false)}>
               <form onSubmit={handleCreateSnapshot} className="form">
                 <input
                   className="input"
-                  placeholder="ex: Junho 2026"
+                  placeholder="e.g. June 2026"
                   value={newSnapLabel}
                   onChange={e => setNewSnapLabel(e.target.value)}
                   autoFocus
                 />
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => setNewSnapOpen(false)}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary">Criar</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setNewSnapOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">Create</button>
                 </div>
               </form>
             </Modal>
 
             {snapshots.length === 0 ? (
               <EmptyState
-                title="Nenhum corte ainda"
-                description="Crie seu primeiro corte para começar a acompanhar sua evolução."
-                ctaLabel="Novo Corte"
+                title="No snapshots yet"
+                description="Create your first snapshot to start tracking your progress."
+                ctaLabel="New Snapshot"
                 onClick={() => setNewSnapOpen(true)}
               />
             ) : (
@@ -944,7 +977,7 @@ export default function App() {
                   {(['A', 'B'] as const).map((slot, idx) => {
                     const selId = selectedSnapIds[idx];
                     const sel = snapshots.find(s => s.id === selId);
-                    const label = slot === 'A' ? 'Per\u00edodo A' : 'Per\u00edodo B';
+                    const label = slot === 'A' ? 'Period A' : 'Period B';
                     return (
                       <div key={slot} className="reviews-period-slot">
                         <label className="reviews-period-label">
@@ -964,7 +997,7 @@ export default function App() {
                             setComparisons(null);
                           }}
                         >
-                          <option value="">— selecionar —</option>
+                          <option value="">— select —</option>
                           {snapshots.map(s => (
                             <option key={s.id} value={s.id}>{s.label}</option>
                           ))}
@@ -980,7 +1013,7 @@ export default function App() {
                       onClick={handleCompare}
                       disabled={selectedSnapIds.length < 2}
                     >
-                      Comparar
+                      Compare
                     </button>
                     <span className="reviews-period-date" style={{ visibility: 'hidden' }}>{' '}</span>
                   </div>
@@ -1016,29 +1049,32 @@ export default function App() {
                       <div className="reviews-summary-bar">
                         <div className="reviews-summary-card">
                           <span className="rsc-value rsc-green">{improved.length}</span>
-                          <span className="rsc-label">Melhoraram</span>
+                          <span className="rsc-label">Improved</span>
                         </div>
                         <div className="reviews-summary-card">
                           <span className="rsc-value rsc-gray">{unchanged.length}</span>
-                          <span className="rsc-label">Sem mudança</span>
+                          <span className="rsc-label">No change</span>
                         </div>
                         <div className="reviews-summary-card">
                           <span className="rsc-value rsc-red">{regressed.length}</span>
-                          <span className="rsc-label">Pioraram</span>
+                          <span className="rsc-label">Declined</span>
                         </div>
                         <div className="reviews-summary-card">
                           <span className="rsc-value">{totalEntries}</span>
-                          <span className="rsc-label">Total de registros</span>
+                          <span className="rsc-label">Total entries</span>
                         </div>
                         {topKpi && topKpi.delta > 0 && (() => {
+                          const topKpiMeta = kpis.find(k => k.id === topKpi.kpiId);
+                          const topInitiative = topKpiMeta?.initiativeId ? initiatives.find(i => i.id === topKpiMeta.initiativeId) : null;
                           const topGoalId = kpiGoalMap[topKpi.kpiId];
                           const topGoal = goals.find(g => g.id === topGoalId);
                           return (
                             <div className="reviews-summary-card rsc-highlight">
                               <span className="rsc-value rsc-green-soft">+{topKpi.delta.toFixed(1)}</span>
-                              <span className="rsc-label">Maior evolução</span>
-                              <span className="rsc-sublabel">{topKpi.kpiName}</span>
-                              {topGoal && <span className="rsc-sublabel" style={{ opacity: 0.7 }}>{topGoal.title}</span>}
+                              <span className="rsc-label">Top growth</span>
+                              <span className="rsc-sublabel rsc-sublabel-kpi">{topKpi.kpiName}</span>
+                              {topInitiative && <span className="rsc-sublabel rsc-sublabel-init">{topInitiative.title}</span>}
+                              {topGoal && <span className="rsc-sublabel rsc-sublabel-goal">{topGoal.title}</span>}
                             </div>
                           );
                         })()}
@@ -1051,21 +1087,21 @@ export default function App() {
                           <div key={goal.id} className="reviews-category-block">
                             <div className="reviews-category-title">
                               <span>{goal.title}</span>
-                              <span className="reviews-category-count">{rows.length} indicador{rows.length !== 1 ? 'es' : ''}</span>
+                              <span className="reviews-category-count">{rows.length} indicator{rows.length !== 1 ? 's' : ''}</span>
                             </div>
                             {rows.length === 0 ? (
-                              <div className="reviews-empty-goal">Nenhum indicador neste goal para comparação</div>
+                              <div className="reviews-empty-goal">No indicators in this goal for comparison</div>
                             ) : (
                               <table className="reviews-table">
                                 <thead>
                                   <tr>
-                                    <th>Indicador</th>
-                                    <th className="col-num">Período A</th>
-                                    <th className="col-num">Período B</th>
-                                    <th className="col-num">Variação</th>
-                                    <th>Progresso</th>
-                                    <th className="col-num">Frequência</th>
-                                    <th className="col-num">Registros</th>
+                                    <th>Indicator</th>
+                                    <th className="col-num">Period A</th>
+                                    <th className="col-num">Period B</th>
+                                    <th className="col-num">Change</th>
+                                    <th>Progress</th>
+                                    <th className="col-num">Frequency</th>
+                                    <th className="col-num">Entries</th>
                                     <th className="col-num">Tipo</th>
                                   </tr>
                                 </thead>
@@ -1127,10 +1163,10 @@ export default function App() {
 
       <Modal open={!!deleteKpiId} title="Delete KPI" onClose={() => setDeleteKpiId('')}>
         <div className="form">
-          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>Tem certeza? Todos os registros desta KPI serão apagados permanentemente.</p>
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>Are you sure? All entries for this KPI will be permanently deleted.</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost" onClick={() => setDeleteKpiId('')}>Cancelar</button>
-            <button className="btn btn-primary" style={{ background: 'var(--danger)' }} onClick={() => appApi().DeleteKPI(deleteKpiId).then(() => { setDeleteKpiId(''); refreshAll(); })}>Excluir</button>
+            <button className="btn btn-ghost" onClick={() => setDeleteKpiId('')}>Cancel</button>
+            <button className="btn btn-primary" style={{ background: 'var(--danger)' }} onClick={() => appApi().DeleteKPI(deleteKpiId).then(() => { setDeleteKpiId(''); refreshAll(); })}>Delete</button>
           </div>
         </div>
       </Modal>
@@ -1153,8 +1189,8 @@ export default function App() {
 
       <Modal open={kpiOpen} title="New KPI" onClose={() => setKpiOpen(false)}>
         <form className="form" onSubmit={handleCreateKpi}>
-          <select value={kpiInitiativeId} onChange={(e) => setKpiInitiativeId(e.target.value)}>
-            <option value="">No initiative</option>
+          <select value={kpiInitiativeId} onChange={(e) => setKpiInitiativeId(e.target.value)} required>
+            <option value="" disabled>Select initiative</option>
             {scopedInitiatives.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
           </select>
           <input value={kpiName} onChange={(e) => setKpiName(e.target.value)} placeholder="KPI name" required />
@@ -1167,6 +1203,18 @@ export default function App() {
           </select>
           <textarea value={kpiDescription} onChange={(e) => setKpiDescription(e.target.value)} placeholder="Description" rows={3} />
           <button className="btn btn-primary" type="submit">Create KPI</button>
+        </form>
+      </Modal>
+
+      <Modal open={editKpiOpen} title="Edit KPI" onClose={() => setEditKpiOpen(false)}>
+        <form className="form" onSubmit={handleUpdateKpi}>
+          <input value={editKpiName} onChange={(e) => setEditKpiName(e.target.value)} placeholder="KPI name" required />
+          <input type="number" min="0.01" step="0.01" value={editKpiTarget} onChange={(e) => setEditKpiTarget(e.target.value)} placeholder="Target" required />
+          <select value={editKpiPeriod} onChange={(e) => setEditKpiPeriod(e.target.value)}>
+            <option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="annual">annual</option><option value="punctual">punctual</option>
+          </select>
+          <textarea value={editKpiDescription} onChange={(e) => setEditKpiDescription(e.target.value)} placeholder="Description" rows={3} />
+          <button className="btn btn-primary" type="submit">Save KPI</button>
         </form>
       </Modal>
 
@@ -1185,7 +1233,7 @@ export default function App() {
             {registerKPIs.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
           <input type="number" min="0.01" step="0.01" value={entryValue} onChange={(e) => setEntryValue(e.target.value)} required />
-          <DatePickerField value={entryDate} onChange={setEntryDate} placeholder="Selecione uma data" />
+          {editingEntryId && <DatePickerField value={entryDate} onChange={setEntryDate} placeholder="Select a date" />}
           <textarea value={entryComment} onChange={(e) => setEntryComment(e.target.value)} placeholder="Comment" rows={3} />
           <button className="btn btn-primary" type="submit">{editingEntryId ? 'Update Entry' : 'Register Entry'}</button>
         </form>

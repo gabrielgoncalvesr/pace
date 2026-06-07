@@ -48,6 +48,8 @@ export function RegisterKPIEntry(arg1:main.RegisterKPIEntryInput):Promise<main.K
 
 export function SetKPISuccessor(arg1:string,arg2:string):Promise<void>;
 
+export function UnarchiveKPI(arg1:string):Promise<void>;
+
 export function UpdateGoal(arg1:string,arg2:main.UpdateGoalInput):Promise<main.GoalOutput>;
 
 export function UpdateInitiative(arg1:string,arg2:main.UpdateInitiativeInput):Promise<main.InitiativeOutput>;

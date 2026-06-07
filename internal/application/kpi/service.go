@@ -96,6 +96,10 @@ func (s *Service) Archive(id string) error {
 	return s.repo.Archive(id)
 }
 
+func (s *Service) Unarchive(id string) error {
+	return s.repo.Unarchive(id)
+}
+
 func (s *Service) Delete(id string) error {
 	return s.repo.Delete(id)
 }
